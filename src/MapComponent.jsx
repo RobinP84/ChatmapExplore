@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
-import AppButton from './AppButton';
 import AdvancedMarker from './MarkerComponent';
 
 const containerStyle = {
@@ -13,7 +12,6 @@ const initialCenter = {
   lng: -38.523,
 };
 
-// Define the libraries array as a constant to avoid unnecessary reloads
 const libraries = ['marker'];
 
 function MapComponent() {
@@ -24,8 +22,8 @@ function MapComponent() {
   });
 
   const [map, setMap] = useState(null);
+  // This state will hold the single marker location.
   const [markerLocation, setMarkerLocation] = useState(null);
-  const [listOfLocations, setListOfLocations] = useState([]);
 
   const onLoad = useCallback((mapInstance) => {
     const bounds = new window.google.maps.LatLngBounds(initialCenter);
@@ -37,54 +35,14 @@ function MapComponent() {
     setMap(null);
   }, []);
 
-  // When the map is clicked, immediately place a marker at the clicked location.
+  // Each map click replaces the current markerLocation.
   const handleMapClick = useCallback((event) => {
     const lat = event.latLng.lat();
     const lng = event.latLng.lng();
     const location = { lat, lng };
 
-    // Immediately update the marker on the map.
     setMarkerLocation(location);
-
-    // Optionally, use the geocoder to get the address and add to the list.
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ location }, (results, status) => {
-      if (status === "OK") {
-        if (results[0]) {
-          setListOfLocations((prevList) => [
-            ...prevList,
-            { name: results[0].formatted_address, location },
-          ]);
-        } else {
-          console.error("No results found");
-        }
-      } else {
-        console.error("Geocoder failed due to: " + status);
-      }
-    });
   }, []);
-
-  // pans map to the selected location and updates the marker that is shown as the current location
-  const onViewLocation = (loc) => {
-    setMarkerLocation({ lat: loc.lat, lng: loc.lng });
-    if (map) {
-      map.panTo(loc);
-      map.setZoom(14);
-    }
-  };
-
-  // deletes selected location from the list and the marker if applicable
-  const onDeleteLocation = (loc) => {
-    const updatedList = listOfLocations.filter(
-      (l) => !(loc.lat === l.location.lat && loc.lng === l.location.lng)
-    );
-    setListOfLocations(updatedList);
-
-    // Clear marker if the deleted location was being viewed.
-    if (markerLocation && loc.lat === markerLocation.lat && loc.lng === markerLocation.lng) {
-      setMarkerLocation(null);
-    }
-  };
 
   return isLoaded ? (
     <div>
@@ -101,59 +59,17 @@ function MapComponent() {
           mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
         }}
       >
-        {/* Marker for the current viewed location */}
+        {/* Render only one marker based on markerLocation */}
         {markerLocation && (
           <AdvancedMarker
             map={map}
             position={markerLocation}
-            onClick={() => console.log("Viewed marker clicked")}
+            onClick={() => console.log("Marker clicked")}
           >
             <div className="default-marker">📍</div>
           </AdvancedMarker>
         )}
-
-        {/* Markers for all added locations */}
-        {listOfLocations.map((loc) => (
-          <AdvancedMarker
-            key={loc.location.lat + loc.location.lng}
-            map={map}
-            position={loc.location}
-            onClick={() => onViewLocation(loc.location)}
-          >
-            <div className="default-marker">📍</div>
-          </AdvancedMarker>
-        ))}
       </GoogleMap>
-
-      <div className="list-container">
-        {listOfLocations.length > 0 ? (
-          <div>
-            <p className="list-heading">List of Selected Locations</p>
-            {listOfLocations.map((loc) => (
-              <div
-                key={loc.location.lat + loc.location.lng}
-                className="list-item"
-              >
-                <p className="latLng-text">{loc.name}</p>
-                <div style={{ display: "flex" }}>
-                  <AppButton handleClick={() => onViewLocation(loc.location)}>
-                    View
-                  </AppButton>
-                  <AppButton handleClick={() => onDeleteLocation(loc.location)}>
-                    Delete
-                  </AppButton>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div>
-            <p className="list-heading">
-              Select a location from the map to show in a list
-            </p>
-          </div>
-        )}
-      </div>
     </div>
   ) : (
     <div>Loading Map...</div>
