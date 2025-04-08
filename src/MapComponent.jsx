@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
-import AppButton from './AppButton'; // Make sure your AppButton component is imported
-import AdvancedMarker from './MarkerComponent'; // Make sure your AdvancedMarker component is imported
+import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
+import AppButton from './AppButton';
+import AdvancedMarker from './MarkerComponent';
 
 const containerStyle = {
   width: '2850px',
@@ -20,14 +20,11 @@ function MapComponent() {
   const { isLoaded } = useJsApiLoader({
     id: import.meta.env.VITE_GOOGLE_MAPS_API_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries, // use the constant here
+    libraries,
   });
 
   const [map, setMap] = useState(null);
-  const [dialogLocation, setDialogLocation] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
   const [markerLocation, setMarkerLocation] = useState(null);
-  const [showDialog, setShowDialog] = useState(false);
   const [listOfLocations, setListOfLocations] = useState([]);
 
   const onLoad = useCallback((mapInstance) => {
@@ -40,27 +37,24 @@ function MapComponent() {
     setMap(null);
   }, []);
 
+  // When the map is clicked, immediately place a marker at the clicked location.
   const handleMapClick = useCallback((event) => {
     const lat = event.latLng.lat();
     const lng = event.latLng.lng();
-
     const location = { lat, lng };
-    setDialogLocation(location);
-    setSelectedLocation(location);
-    setShowDialog(true);
-  }, []);
 
-  const onAddLocation = useCallback(() => {
+    // Immediately update the marker on the map.
+    setMarkerLocation(location);
+
+    // Optionally, use the geocoder to get the address and add to the list.
     const geocoder = new window.google.maps.Geocoder();
-
-    geocoder.geocode({ location: selectedLocation }, (results, status) => {
+    geocoder.geocode({ location }, (results, status) => {
       if (status === "OK") {
         if (results[0]) {
           setListOfLocations((prevList) => [
             ...prevList,
-            { name: results[0].formatted_address, location: selectedLocation },
+            { name: results[0].formatted_address, location },
           ]);
-          setShowDialog(false);
         } else {
           console.error("No results found");
         }
@@ -68,25 +62,25 @@ function MapComponent() {
         console.error("Geocoder failed due to: " + status);
       }
     });
-  }, [selectedLocation]);
+  }, []);
 
-  // displays marker on the map for the selected location
+  // pans map to the selected location and updates the marker that is shown as the current location
   const onViewLocation = (loc) => {
     setMarkerLocation({ lat: loc.lat, lng: loc.lng });
     if (map) {
       map.panTo(loc);
-      map.setZoom(14); // Optional: Zoom closer to viewed location
+      map.setZoom(14);
     }
   };
 
-  // deletes selected location from the list
+  // deletes selected location from the list and the marker if applicable
   const onDeleteLocation = (loc) => {
     const updatedList = listOfLocations.filter(
       (l) => !(loc.lat === l.location.lat && loc.lng === l.location.lng)
     );
     setListOfLocations(updatedList);
 
-    // Clear marker if deleted location was being viewed
+    // Clear marker if the deleted location was being viewed.
     if (markerLocation && loc.lat === markerLocation.lat && loc.lng === markerLocation.lng) {
       setMarkerLocation(null);
     }
@@ -104,21 +98,10 @@ function MapComponent() {
         disableDefaultUI
         onClick={handleMapClick}
         options={{
-          mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID, // Replace with your valid Map ID
+          mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
         }}
       >
-        {showDialog && dialogLocation && (
-          <InfoWindow
-            position={dialogLocation}
-            onCloseClick={() => setShowDialog(false)}
-          >
-            <button className="app-button" onClick={onAddLocation}>
-              Add this location
-            </button>
-          </InfoWindow>
-        )}
-
-        {/* Marker for the currently viewed location */}
+        {/* Marker for the current viewed location */}
         {markerLocation && (
           <AdvancedMarker
             map={map}
