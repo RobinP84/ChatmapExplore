@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
 import AdvancedMarker from './MarkerComponent';
 import { usePosts } from './hooks/usePosts';
+import { MakePostIcon, PostMarkerIcon } from './Components/CustomMarkerIcon';
+import LoginButton from './Components/loginButtonComponent'; // Import your login button component
 
 const containerStyle = {
   width: '2850px',
@@ -22,15 +24,17 @@ function MapComponent() {
     libraries,
   });
 
-  // These states are used for the manually placed, editable marker.
+  // States for the manually placed marker (for making posts)
   const [map, setMap] = useState(null);
   const [markerLocation, setMarkerLocation] = useState(null);
   const [editingMarker, setEditingMarker] = useState(false);
   const [markerText, setMarkerText] = useState("");
   const [savedMarkerText, setSavedMarkerText] = useState("");
 
-  // For the purposes of this example, we define a static viewed area.
-  // In a real app, you might derive this from the map's bounds.
+  // State to manage which post marker's tooltip (InfoWindow) is open.
+  const [selectedPost, setSelectedPost] = useState(null);
+
+  // For this example, we define a static viewed area.
   const viewedArea = {
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
@@ -49,7 +53,7 @@ function MapComponent() {
     setMap(null);
   }, []);
 
-  // When the map is clicked, the manually placed marker is updated.
+  // When the map is clicked, update the manually placed marker.
   const handleMapClick = useCallback((event) => {
     const lat = event.latLng.lat();
     const lng = event.latLng.lng();
@@ -61,13 +65,13 @@ function MapComponent() {
     setSavedMarkerText("");
   }, []);
 
-  // When the manual marker is clicked, editing mode is enabled.
+  // When the manually placed marker is clicked, enable editing.
   const handleMarkerClick = useCallback(() => {
     setEditingMarker(true);
     setMarkerText(savedMarkerText);
   }, [savedMarkerText]);
 
-  // When Enter is pressed in the input, save the text.
+  // Save marker text on pressing Enter.
   const handleInputKeyDown = useCallback((event) => {
     if (event.key === "Enter") {
       setSavedMarkerText(markerText);
@@ -75,8 +79,18 @@ function MapComponent() {
     }
   }, [markerText]);
 
+  // When a post marker is clicked, update selectedPost state.
+  const handlePostMarkerClick = (post) => {
+    setSelectedPost(post);
+  };
+
   return isLoaded ? (
     <div>
+      {/* Render the login button above the map */}
+      <div style={{ margin: '20px', textAlign: 'center' }}>
+        {/* <LoginButton /> */}
+      </div>
+
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={initialCenter}
@@ -97,7 +111,7 @@ function MapComponent() {
             position={markerLocation}
             onClick={handleMarkerClick}
           >
-            <div className="default-marker">📍</div>
+            <MakePostIcon />
             {savedMarkerText && (
               <div
                 className="marker-label"
@@ -111,7 +125,7 @@ function MapComponent() {
                   padding: '2px 4px',
                   borderRadius: '4px',
                   fontSize: '12px',
-                  boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.3)'
+                  boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.3)',
                 }}
               >
                 {savedMarkerText}
@@ -141,17 +155,42 @@ function MapComponent() {
         )}
 
         {/* Render markers for all posts fetched from the repository */}
-        {posts.map((post) => (
-          <AdvancedMarker 
-            key={post.id}
-            map={map}
-            position={{ lat: post.postLocationLat, lng: post.postLocationLong }}
-            // You can add an onClick or an InfoWindow here for post details if desired.
-          >
-            <div className="default-marker" title={post.title}>📍</div>
-          </AdvancedMarker>
+        {posts.map((p) => (
+          <React.Fragment key={p.id}>
+            <AdvancedMarker
+              map={map}
+              position={{ lat: p.postLocationLat, lng: p.postLocationLong }}
+              title={p.title}
+              onClick={() => handlePostMarkerClick(p)}
+            >
+              <PostMarkerIcon />
+            </AdvancedMarker>
+            <InfoWindow
+              position={{ lat: p.postLocationLat, lng: p.postLocationLong }}
+              title={p.title}
+              options={{ disableAutoPan: true }}
+            >
+              <div>
+                <h3>{p.title}</h3>
+                <p>{p.message}</p>
+              </div>
+            </InfoWindow>
+          </React.Fragment>
         ))}
-        
+
+        {/* Optionally, you can still render a selected InfoWindow */}
+        {selectedPost && (
+          <InfoWindow
+            position={{ lat: selectedPost.postLocationLat, lng: selectedPost.postLocationLong }}
+            onCloseClick={() => setSelectedPost(null)}
+            title={selectedPost.title}
+          >
+            <div>
+              <h3>{selectedPost.title}</h3>
+              <p>{selectedPost.message}</p>
+            </div>
+          </InfoWindow>
+        )}
       </GoogleMap>
 
       {/* Button to fetch posts from the repository */}
