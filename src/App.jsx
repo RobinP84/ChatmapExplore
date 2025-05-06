@@ -3,8 +3,7 @@ import MapComponent from './MapComponent';
 
 function App() {
   return (
-    <div>
-      <h1>Chatmap</h1>
+    <div class="App-frame">
       <MapComponent />
     </div>
   );

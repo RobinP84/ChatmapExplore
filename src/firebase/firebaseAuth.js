@@ -32,3 +32,12 @@ export function onAuthStateChanged(callback) {
 export function getCurrentUser() {
   return auth.currentUser;
 }
+
+const firebaseAuth = {
+  signInWithGoogle,
+  logOut,
+  onAuthStateChanged,
+  getCurrentUser
+};
+
+export default firebaseAuth;
