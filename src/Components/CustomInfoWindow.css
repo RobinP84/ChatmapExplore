@@ -1,0 +1,21 @@
+.custom-info-window {
+  position: relative;
+  background: white;
+  border: 2px solid #333;        /* your custom border */
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  font-size: 14px;
+  /* remove default close “×” simply by not rendering one */
+}
+
+.custom-info-window.expanded-post-window {
+  /* fill the full width of the Google overlay pane */
+  width: 100% !important;
+  max-width: none !important;  /* override any inherited cap */
+
+  /* if Google applied a translate(-50%) centering on this,
+     you may need to neutralize it: */
+  transform: none !important;
+  left: 0 !important;
+}

@@ -1,5 +1,3 @@
-import React from 'react';
-
 function AppButton({ handleClick, children }) {
   return (
     <button

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
 function AdvancedMarker({ map, position, children, onClick }) {

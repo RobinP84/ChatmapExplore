@@ -1,4 +1,3 @@
-import React from 'react';
 import './goToProfileIcon.css';
 
 export const MakePostIcon = (props) => {
