@@ -1,6 +1,5 @@
 import React, { 
   useState, 
-  useRef,
   useCallback, 
   useEffect 
 } from 'react';
@@ -12,7 +11,6 @@ import { MakePostIcon, PostMarkerIcon } from './Components/CustomMarkerIcon';
 import LoginButton                      from './Components/loginButtonComponent';
 import authService                      from './firebase/firebaseAuth';
 import CustomInfoWindow                 from './Components/CustomInfoWindow';
-import Sprites                          from './assets/sprites.svg';
 
 const containerStyle = { width: '375px', height: '812px' };
 const initialCenter   = { lat: -3.745, lng: -38.523 };
@@ -33,32 +31,30 @@ function MapComponent() {
   const [user, setUser]                     = useState(null);
   const [selectedPost, setSelectedPost]     = useState(null);
 
-  // destructure your hook
   const { posts, loading, reloadPosts } = usePosts({
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
   });
 
-  // auth
   useEffect(() => {
     const unsub = authService.onAuthStateChanged(u => setUser(u));
     return unsub;
   }, []);
 
-  // map load/unmount
   const onLoad = useCallback(m => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
-  // manual post
   const handleMapClick = useCallback(e => {
     setMarkerLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     setEditingMarker(false);
     setSavedMarkerText('');
   }, []);
+
   const handleMarkerClick = useCallback(() => {
     setEditingMarker(true);
     setMarkerText(savedMarkerText);
   }, [savedMarkerText]);
+
   const handleInputKeyDown = useCallback(e => {
     if (e.key === 'Enter') {
       setSavedMarkerText(markerText);
@@ -66,7 +62,6 @@ function MapComponent() {
     }
   }, [markerText]);
 
-  // post marker click
   const handlePostMarkerClick = post => setSelectedPost(post);
 
   if (!isLoaded) return <div>Loading Map…</div>;
@@ -75,11 +70,20 @@ function MapComponent() {
     <div>
       {/* NAV BAR */}
       <div className="nav-bar">
-        {user 
-          ? <button onClick={() => window.location.href = '/profile'}>…</button>
-          : <LoginButton />
-        }
-        <button onClick={reloadPosts} disabled={loading}>…</button>
+        {user ? (
+          <button onClick={() => window.location.href = '/profile'}>
+            <svg width={32} height={32} aria-hidden="true">
+              <use href="#icon-user" />
+            </svg>
+          </button>
+        ) : (
+          <LoginButton />
+        )}
+        <button onClick={reloadPosts} disabled={loading}>
+          <svg width={32} height={32} aria-hidden="true">
+            <use href="#icon-search" />
+          </svg>
+        </button>
       </div>
 
       <GoogleMap
@@ -100,14 +104,18 @@ function MapComponent() {
             position={markerLocation}
             onClick={handleMarkerClick}
           >
-            <MakePostIcon/>
+            <MakePostIcon />
             {savedMarkerText && (
               <div className="marker-label" style={{
-                position:'absolute', bottom:'30px',
-                left:'50%', transform:'translateX(-50%)',
-                backgroundColor:'white', padding:'2px 4px',
-                borderRadius:'4px', fontSize:'12px',
-                boxShadow:'0 1px 3px rgba(0,0,0,0.3)'
+                position: 'absolute',
+                bottom: '30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                backgroundColor: 'white',
+                padding: '2px 4px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
               }}>
                 {savedMarkerText}
               </div>
@@ -125,7 +133,7 @@ function MapComponent() {
               onKeyDown={handleInputKeyDown}
               placeholder="Enter text and press Enter"
               autoFocus
-              style={{ width:200, padding:4 }}
+              style={{ width: 200, padding: 4 }}
             />
           </CustomInfoWindow>
         )}
@@ -141,7 +149,7 @@ function MapComponent() {
               }}
               onClick={() => handlePostMarkerClick(post)}
             >
-              <PostMarkerIcon/>
+              <PostMarkerIcon />
             </AdvancedMarker>
 
             <CustomInfoWindow
@@ -150,7 +158,7 @@ function MapComponent() {
                 lat: post.postLocationLat,
                 lng: post.postLocationLong
               }}
-              style={{ cursor:'pointer' }}
+              style={{ cursor: 'pointer' }}
               onClose={() => handlePostMarkerClick(post)}
             >
               <strong>{post.title}</strong>
@@ -167,7 +175,7 @@ function MapComponent() {
               lng: selectedPost.postLocationLong
             }}
             className="expanded-post-window"
-            style={{ cursor:'default' }}
+            style={{ cursor: 'default' }}
             onClose={() => setSelectedPost(null)}
           >
             <h3>{selectedPost.title}</h3>

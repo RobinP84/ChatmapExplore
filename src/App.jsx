@@ -1,11 +1,17 @@
-import MapComponent from './MapComponent';
+import React from 'react'
+import SpriteLoader from './Components/SpriteLoader'
+import MapComponent from './MapComponent'
 
 function App() {
   return (
-    <div>
+    <>
+      {/* Fetch & inject your sprites.svg once */}
+      <SpriteLoader />
+
+      {/* Now MapComponent (and any other child) can just do <use href="#icon-…" /> */}
       <MapComponent />
-    </div>
-  );
+    </>
+  )
 }
 
-export default App;
+export default App
