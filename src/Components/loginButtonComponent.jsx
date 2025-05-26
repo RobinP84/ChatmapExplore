@@ -10,7 +10,11 @@ const LoginButton = () => {
     }
   };
 
-  return <button onClick={handleLogin}>Log in with Google</button>;
+  return <button onClick={handleLogin}>
+    <svg width={32} height={32} aria-hidden="true">
+      <use href="#icon-user" />
+    </svg>
+  </button>;
 };
 
 export default LoginButton;

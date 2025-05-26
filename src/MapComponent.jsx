@@ -1,3 +1,5 @@
+// src/MapComponent.jsx
+
 import React, { 
   useState, 
   useCallback, 
@@ -6,11 +8,11 @@ import React, {
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 
 import AdvancedMarker                   from './MarkerComponent';
-import { usePosts }                     from './hooks/usePosts';
+import { usePosts }                    from './hooks/usePosts';
 import { MakePostIcon, PostMarkerIcon } from './Components/CustomMarkerIcon';
-import LoginButton                      from './Components/loginButtonComponent';
-import authService                      from './firebase/firebaseAuth';
-import CustomInfoWindow                 from './Components/CustomInfoWindow';
+import LoginButton                     from './Components/loginButtonComponent';
+import authService                     from './firebase/firebaseAuth';
+import CustomInfoWindow                from './Components/CustomInfoWindow';
 
 const containerStyle = { width: '375px', height: '812px' };
 const initialCenter   = { lat: -3.745, lng: -38.523 };
@@ -18,18 +20,18 @@ const libraries       = ['marker'];
 
 function MapComponent() {
   const { isLoaded } = useJsApiLoader({
-    id:    import.meta.env.VITE_GOOGLE_MAPS_API_ID,
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries
+    id:                import.meta.env.VITE_GOOGLE_MAPS_API_ID,
+    googleMapsApiKey:  import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries,
   });
 
-  const [map, setMap]                       = useState(null);
-  const [markerLocation, setMarkerLocation] = useState(null);
-  const [editingMarker, setEditingMarker]   = useState(false);
-  const [markerText, setMarkerText]         = useState('');
-  const [savedMarkerText, setSavedMarkerText] = useState('');
-  const [user, setUser]                     = useState(null);
-  const [selectedPost, setSelectedPost]     = useState(null);
+  const [map, setMap]                           = useState(null);
+  const [markerLocation, setMarkerLocation]     = useState(null);
+  const [editingMarker, setEditingMarker]       = useState(false);
+  const [markerText, setMarkerText]             = useState('');
+  const [savedMarkerText, setSavedMarkerText]   = useState('');
+  const [user, setUser]                         = useState(null);
+  const [selectedPost, setSelectedPost]         = useState(null);
 
   const { posts, loading, reloadPosts } = usePosts({
     southwest: { lat: -4.0, lng: -39.0 },
@@ -41,7 +43,7 @@ function MapComponent() {
     return unsub;
   }, []);
 
-  const onLoad = useCallback(m => setMap(m), []);
+  const onLoad    = useCallback(m => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
   const handleMapClick = useCallback(e => {
@@ -97,7 +99,7 @@ function MapComponent() {
         onClick={handleMapClick}
         options={{ mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID }}
       >
-        {/* 1) Manual “make a post” */}
+        {/* 1) Manual “make a post” marker */}
         {markerLocation && (
           <AdvancedMarker
             map={map}
@@ -106,26 +108,32 @@ function MapComponent() {
           >
             <MakePostIcon />
             {savedMarkerText && (
-              <div className="marker-label" style={{
-                position: 'absolute',
-                bottom: '30px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                backgroundColor: 'white',
-                padding: '2px 4px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-              }}>
+              <div
+                className="marker-label"
+                style={{
+                  position: 'absolute',
+                  bottom: '30px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  backgroundColor: 'white',
+                  padding: '2px 4px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              >
                 {savedMarkerText}
               </div>
             )}
           </AdvancedMarker>
         )}
 
-        {/* 2) Edit‐input popup */}
+        {/* 2) Edit‐input popup (no category) */}
         {markerLocation && editingMarker && (
-          <CustomInfoWindow map={map} position={markerLocation}>
+          <CustomInfoWindow
+            map={map}
+            position={markerLocation}
+          >
             <input
               type="text"
               value={markerText}
@@ -138,14 +146,14 @@ function MapComponent() {
           </CustomInfoWindow>
         )}
 
-        {/* 3) BASIC popup for every post */}
+        {/* 3) Basic popup for every post (passes post.category) */}
         {Array.isArray(posts) && posts.map(post => (
           <React.Fragment key={post.id}>
             <AdvancedMarker
               map={map}
               position={{
                 lat: post.postLocationLat,
-                lng: post.postLocationLong
+                lng: post.postLocationLong,
               }}
               onClick={() => handlePostMarkerClick(post)}
             >
@@ -156,27 +164,29 @@ function MapComponent() {
               map={map}
               position={{
                 lat: post.postLocationLat,
-                lng: post.postLocationLong
+                lng: post.postLocationLong,
               }}
               style={{ cursor: 'pointer' }}
               onClose={() => handlePostMarkerClick(post)}
+              category={post.categoryId}
             >
               <strong>{post.title}</strong>
             </CustomInfoWindow>
           </React.Fragment>
         ))}
 
-        {/* 4) EXPANDED popup on top */}
+        {/* 4) Expanded popup on top (also passes category) */}
         {selectedPost && (
           <CustomInfoWindow
             map={map}
             position={{
               lat: selectedPost.postLocationLat,
-              lng: selectedPost.postLocationLong
+              lng: selectedPost.postLocationLong,
             }}
             className="expanded-post-window"
             style={{ cursor: 'default' }}
             onClose={() => setSelectedPost(null)}
+            category={selectedPost.categoryId}
           >
             <h3>{selectedPost.title}</h3>
             <p>{selectedPost.message}</p>
