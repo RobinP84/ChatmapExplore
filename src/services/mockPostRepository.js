@@ -1,31 +1,31 @@
 const mockPosts = [
-    {
-      id: "1",
-      userId: 1,
-      title: "Hello World",
-      message: "This is my first mock post!",
-      categoryId: "sports",
-      postLocationLat: -3.745,
-      postLocationLong: -38.523,
-      rating: 5,
-      added: new Date().toISOString(),
-      expire: new Date(Date.now() + 86400000).toISOString(), // expires in 1 day
-      active: true,
-    },
-    {
-      id: "2",
-      userId: 2,
-      title: "Another Post",
-      message: "Here is another sample post.",
-      categoryId: "nightlife",
-      postLocationLat: -3.75,
-      postLocationLong: -38.52,
-      rating: 4,
-      added: new Date().toISOString(),
-      expire: new Date(Date.now() + 172800000).toISOString(), // expires in 2 days
-      active: true,
-    },
-  ];
+  {
+    id: "1",
+    userId: 1,
+    title: "Hello World",
+    message: "This is my first mock post!",
+    category: "sports",      // ← renamed here
+    postLocationLat: -3.745,
+    postLocationLong: -38.523,
+    rating: 5,
+    added: new Date().toISOString(),
+    expire: new Date(Date.now() + 86400000).toISOString(),
+    active: true,
+  },
+  {
+    id: "2",
+    userId: 2,
+    title: "Another Post",
+    message: "Here is another sample post.",
+    category: "nightlife",   // ← and here
+    postLocationLat: -3.75,
+    postLocationLong: -38.52,
+    rating: 4,
+    added: new Date().toISOString(),
+    expire: new Date(Date.now() + 172800000).toISOString(),
+    active: true,
+  },
+];
   
   // Mimic an asynchronous call that fetches posts.
   // Optionally filter the posts based on the viewed area or other criteria.

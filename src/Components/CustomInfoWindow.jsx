@@ -9,7 +9,7 @@ export default function CustomInfoWindow({
   children,
   onClose,
   className = '',
-  categoryId,
+  category,
   style     = {},
 }) {
   const overlayRef   = useRef(null);
@@ -22,7 +22,7 @@ export default function CustomInfoWindow({
     wrapper.className = `custom-info-window ${className}`;
 
     // look up the right border color (fall back to default)
-    const borderColor = CATEGORY_COLORS[categoryId] || CATEGORY_COLORS.default;
+    const borderColor = CATEGORY_COLORS[category] || CATEGORY_COLORS.default;
 
     // merge your dynamic border + any other styles passed in
     Object.assign(wrapper.style, {

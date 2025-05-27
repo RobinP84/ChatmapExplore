@@ -168,7 +168,7 @@ function MapComponent() {
               }}
               style={{ cursor: 'pointer' }}
               onClose={() => handlePostMarkerClick(post)}
-              category={post.categoryId}
+              category={post.category}
             >
               <strong>{post.title}</strong>
             </CustomInfoWindow>
@@ -186,7 +186,7 @@ function MapComponent() {
             className="expanded-post-window"
             style={{ cursor: 'default' }}
             onClose={() => setSelectedPost(null)}
-            category={selectedPost.categoryId}
+            category={selectedPost.category}
           >
             <h3>{selectedPost.title}</h3>
             <p>{selectedPost.message}</p>
