@@ -1,6 +1,8 @@
+// src/Components/CustomInfoWindow.jsx
+
 import { useEffect, useRef } from 'react';
 import { createRoot }         from 'react-dom/client';
-import FullWidthOverlay       from './FullWidthOverlay.js';
+import FullWidthOverlay       from './FullWidthOverlay';
 import { CATEGORY_COLORS }    from '../constants/categoryColors';
 
 export default function CustomInfoWindow({
@@ -16,61 +18,69 @@ export default function CustomInfoWindow({
   const wrapperRef   = useRef(null);
   const reactRootRef = useRef(null);
 
-  // 1) Build our wrapper and React root once
+  // ── 1) Create the wrapper <div> and React root ONCE
   useEffect(() => {
     const wrapper = document.createElement('div');
-    wrapper.className = `custom-info-window ${className}`;
-
-    // look up the right border color (fall back to default)
-    const borderColor = CATEGORY_COLORS[category] || CATEGORY_COLORS.default;
-
-    // merge your dynamic border + any other styles passed in
-    Object.assign(wrapper.style, {
-      border: `2px solid ${borderColor}`,
-      ...style
-    });
-
     wrapperRef.current = wrapper;
+
+    // mount a React root into it
     reactRootRef.current = createRoot(wrapper);
 
-    // cleanup on unmount
     return () => {
-      Promise.resolve().then(() => {
-        reactRootRef.current.unmount();
-        reactRootRef.current = null;
-      });
+      // Defer unmount until after React’s render has completed
+     const root = reactRootRef.current;
+     Promise.resolve().then(() => {
+       root.unmount();
+     });
+     reactRootRef.current = null;
     };
-  }, []);  // run only on mount/unmount
+  }, []);  // no dependencies: runs only mount & unmount
 
-  // 2) Re-render the children whenever they change
+  // ── 2) Render (or re-render) children whenever they change
   useEffect(() => {
-    if (reactRootRef.current && wrapperRef.current) {
+    if (reactRootRef.current) {
       reactRootRef.current.render(children);
     }
   }, [children]);
 
-  // 3) Tear down & remake the Google Overlay whenever map/position changes
+  // ── 3) Update wrapper’s className & inline styles when styling props change
   useEffect(() => {
-    // clean up previous
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // update CSS classes
+    wrapper.className = `custom-info-window ${className}`;
+
+    // pick the right border color
+    const borderColor = CATEGORY_COLORS[category] || CATEGORY_COLORS.default;
+
+    // merge into inline styles
+    Object.assign(wrapper.style, {
+      border: `2px solid ${borderColor}`,
+      ...style,
+    });
+  }, [className, category, style]);
+
+  // ── 4) Create/cleanup the Google Overlay when map/position/onClose change
+  useEffect(() => {
+    // remove any old overlay
     if (overlayRef.current) {
       overlayRef.current.setMap(null);
       overlayRef.current = null;
     }
 
     if (map && position && wrapperRef.current) {
-      // inject the HTML string of our styled wrapper
+      // pass the *actual* HTMLElement into the overlay
       overlayRef.current = FullWidthOverlay(
         map,
         { lat: position.lat, lng: position.lng },
-        wrapperRef.current.outerHTML
+        wrapperRef.current
       );
 
-      // wire up onClose, if provided
+      // wire up your “×” button if you passed onClose
       if (onClose) {
-        setTimeout(() => {
-          const btn = wrapperRef.current.querySelector('.close-btn');
-          if (btn) btn.addEventListener('click', onClose);
-        }, 0);
+        const btn = wrapperRef.current.querySelector('.close-btn');
+        if (btn) btn.addEventListener('click', onClose);
       }
     }
 

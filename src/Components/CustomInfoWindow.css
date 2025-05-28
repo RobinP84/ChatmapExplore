@@ -6,6 +6,7 @@
   padding: 8px 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   font-size: 14px;
+  max-width: 200px; /* adjust as needed */
   /* remove default close “×” simply by not rendering one */
 }
 

@@ -167,6 +167,7 @@ function MapComponent() {
                 lng: post.postLocationLong,
               }}
               style={{ cursor: 'pointer' }}
+              onClick={() => handlePostMarkerClick(post)}
               onClose={() => handlePostMarkerClick(post)}
               category={post.category}
             >
