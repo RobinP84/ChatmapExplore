@@ -1,76 +1,74 @@
 // src/MapComponent.jsx
-
-import React, { 
-  useState, 
-  useCallback, 
-  useEffect 
-} from 'react';
-import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
-
-import AdvancedMarker                   from './MarkerComponent';
-import { usePosts }                    from './hooks/usePosts';
-import { MakePostIcon, PostMarkerIcon } from './Components/CustomMarkerIcon';
-import LoginButton                     from './Components/loginButtonComponent';
-import authService                     from './firebase/firebaseAuth';
-import CustomInfoWindow                from './Components/CustomInfoWindow';
+import React, { useState, useCallback, useEffect } from 'react';
+import { GoogleMap, useJsApiLoader }            from '@react-google-maps/api';
+import { INFO_WINDOW_MODE }                     from './constants/infoWindowModes';
+import AdvancedMarker                           from './MarkerComponent';
+import { usePosts }                             from './hooks/usePosts';
+import { MakePostIcon, PostMarkerIcon }         from './Components/CustomMarkerIcon';
+import LoginButton                              from './Components/loginButtonComponent';
+import authService                              from './firebase/firebaseAuth';
+import CustomInfoWindow                         from './Components/CustomInfoWindow';
 
 const containerStyle = { width: '375px', height: '812px' };
-const initialCenter   = { lat: -3.745, lng: -38.523 };
-const libraries       = ['marker'];
+const initialCenter  = { lat: -3.745, lng: -38.523 };
+const libraries      = ['marker'];
 
 function MapComponent() {
   const { isLoaded } = useJsApiLoader({
-    id:                import.meta.env.VITE_GOOGLE_MAPS_API_ID,
-    googleMapsApiKey:  import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    id:               import.meta.env.VITE_GOOGLE_MAPS_API_ID,
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries,
   });
 
-  const [map, setMap]                           = useState(null);
-  const [markerLocation, setMarkerLocation]     = useState(null);
-  const [editingMarker, setEditingMarker]       = useState(false);
-  const [markerText, setMarkerText]             = useState('');
-  const [savedMarkerText, setSavedMarkerText]   = useState('');
-  const [user, setUser]                         = useState(null);
-  const [selectedPost, setSelectedPost]         = useState(null);
+  const [map, setMap]               = useState(null);
+  const [markerLocation, setMarker] = useState(null);
+  const [editingMarker, setEditing]= useState(false);
+  const [markerText, setMarkerText]= useState('');
+  const [savedText, setSavedText]  = useState('');
+  const [user, setUser]            = useState(null);
+  const [selectedPost, setSelected]= useState(null);
 
   const { posts, loading, reloadPosts } = usePosts({
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
   });
 
-  useEffect(() => {
-    const unsub = authService.onAuthStateChanged(u => setUser(u));
-    return unsub;
-  }, []);
+  useEffect(() => authService.onAuthStateChanged(u => setUser(u)), []);
 
   const onLoad    = useCallback(m => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
   const handleMapClick = useCallback(e => {
-    setMarkerLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-    setEditingMarker(false);
-    setSavedMarkerText('');
+    setMarker({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    setEditing(false);
+    setSavedText('');
   }, []);
 
   const handleMarkerClick = useCallback(() => {
-    setEditingMarker(true);
-    setMarkerText(savedMarkerText);
-  }, [savedMarkerText]);
+    setEditing(true);
+    setMarkerText(savedText);
+  }, [savedText]);
 
   const handleInputKeyDown = useCallback(e => {
     if (e.key === 'Enter') {
-      setSavedMarkerText(markerText);
-      setEditingMarker(false);
+      setSavedText(markerText);
+      setEditing(false);
     }
   }, [markerText]);
 
-  const handlePostMarkerClick = post => setSelectedPost(post);
+  const togglePost = useCallback(post => {
+    setSelected(prev => prev?.id === post.id ? null : post);
+  }, []);
+
+  const closeExpanded = useCallback(() => {
+    setSelected(null);
+  }, []);
 
   if (!isLoaded) return <div>Loading Map…</div>;
 
   return (
     <div>
-      {/* NAV BAR */}
+            {/* NAV BAR */}
       <div className="nav-bar">
         {user ? (
           <button onClick={() => window.location.href = '/profile'}>
@@ -99,36 +97,23 @@ function MapComponent() {
         onClick={handleMapClick}
         options={{ mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID }}
       >
-        {/* 1) Manual “make a post” marker */}
+        {/* 1) “Make a post” marker */}
         {markerLocation && (
           <AdvancedMarker
             map={map}
             position={markerLocation}
             onClick={handleMarkerClick}
           >
-            <MakePostIcon />
-            {savedMarkerText && (
-              <div
-                className="marker-label"
-                style={{
-                  position: 'absolute',
-                  bottom: '30px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  backgroundColor: 'white',
-                  padding: '2px 4px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                }}
-              >
-                {savedMarkerText}
+            <MakePostIcon/>
+            {savedText && (
+              <div className="marker-label" style={{ /*…*/ }}>
+                {savedText}
               </div>
             )}
           </AdvancedMarker>
         )}
 
-        {/* 2) Edit‐input popup (no category) */}
+        {/* 2) Edit‐input popup */}
         {markerLocation && editingMarker && (
           <CustomInfoWindow
             map={map}
@@ -141,59 +126,45 @@ function MapComponent() {
               onKeyDown={handleInputKeyDown}
               placeholder="Enter text and press Enter"
               autoFocus
-              style={{ width: 200, padding: 4 }}
+              style={{ width:200, padding:4 }}
             />
           </CustomInfoWindow>
         )}
 
-        {/* 3) Basic popup for every post (passes post.category) */}
-        {Array.isArray(posts) && posts.map(post => (
-          <React.Fragment key={post.id}>
-            <AdvancedMarker
-              map={map}
-              position={{
-                lat: post.postLocationLat,
-                lng: post.postLocationLong,
-              }}
-              onClick={() => handlePostMarkerClick(post)}
-            >
-              <PostMarkerIcon />
-            </AdvancedMarker>
+        {/* 3 & 4) Minimized & Expanded for each post */}
+        {posts.map(post => {
+          const mode = selectedPost?.id === post.id
+            ? INFO_WINDOW_MODE.EXPANDED
+            : INFO_WINDOW_MODE.MINIMIZED;
 
-            <CustomInfoWindow
-              map={map}
-              position={{
-                lat: post.postLocationLat,
-                lng: post.postLocationLong,
-              }}
-              style={{ cursor: 'pointer' }}
-              onClick={() => handlePostMarkerClick(post)}
-              onClose={() => handlePostMarkerClick(post)}
-              category={post.category}
-            >
-              <strong>{post.title}</strong>
-            </CustomInfoWindow>
-          </React.Fragment>
-        ))}
+          return (
+            <React.Fragment key={post.id}>
+              <AdvancedMarker
+                map={map}
+                position={{
+                  lat: post.postLocationLat,
+                  lng: post.postLocationLong,
+                }}
+                onClick={() => togglePost(post)}
+              >
+                <PostMarkerIcon/>
+              </AdvancedMarker>
 
-        {/* 4) Expanded popup on top (also passes category) */}
-        {selectedPost && (
-          <CustomInfoWindow
-            map={map}
-            position={{
-              lat: selectedPost.postLocationLat,
-              lng: selectedPost.postLocationLong,
-            }}
-            className="expanded-post-window"
-            style={{ cursor: 'default' }}
-            onClose={() => setSelectedPost(null)}
-            category={selectedPost.category}
-          >
-            <h3>{selectedPost.title}</h3>
-            <p>{selectedPost.message}</p>
-            <button className="close-btn">×</button>
-          </CustomInfoWindow>
-        )}
+              <CustomInfoWindow
+                map={map}
+                position={{
+                  lat: post.postLocationLat,
+                  lng: post.postLocationLong,
+                }}
+                post={post}
+                mode={mode}
+                category={post.category}
+                onClick={() => togglePost(post)}
+                onClose={closeExpanded}
+              />
+            </React.Fragment>
+          );
+        })}
       </GoogleMap>
     </div>
   );

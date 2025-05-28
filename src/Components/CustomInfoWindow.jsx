@@ -1,96 +1,94 @@
 // src/Components/CustomInfoWindow.jsx
-
-import { useEffect, useRef } from 'react';
-import { createRoot }         from 'react-dom/client';
-import FullWidthOverlay       from './FullWidthOverlay';
-import { CATEGORY_COLORS }    from '../constants/categoryColors';
+import React, { useEffect, useRef } from 'react';
+import { createRoot }        from 'react-dom/client';
+import FullWidthOverlay      from './FullWidthOverlay';
+import { CATEGORY_COLORS }   from '../constants/categoryColors';
+import { INFO_WINDOW_MODE }  from '../constants/infoWindowModes';
+import ExpandedPostBody      from './ExpandedPostBody';
 
 export default function CustomInfoWindow({
   map,
   position,
-  children,
+  post,             // { id, title, message, category, … }
+  mode = INFO_WINDOW_MODE.MINIMIZED,
+  onClick,
   onClose,
   className = '',
-  category,
   style     = {},
 }) {
   const overlayRef   = useRef(null);
   const wrapperRef   = useRef(null);
   const reactRootRef = useRef(null);
 
-  // ── 1) Create the wrapper <div> and React root ONCE
+  // 1) Create the wrapper & React root ONCE
   useEffect(() => {
     const wrapper = document.createElement('div');
     wrapperRef.current = wrapper;
-
-    // mount a React root into it
     reactRootRef.current = createRoot(wrapper);
-
     return () => {
-      // Defer unmount until after React’s render has completed
-     const root = reactRootRef.current;
-     Promise.resolve().then(() => {
-       root.unmount();
-     });
-     reactRootRef.current = null;
+      // defer unmount so it never runs mid‐render
+      const root = reactRootRef.current;
+      Promise.resolve().then(() => root.unmount());
+      reactRootRef.current = null;
     };
-  }, []);  // no dependencies: runs only mount & unmount
+  }, []);
 
-  // ── 2) Render (or re-render) children whenever they change
+  // 2) Render whenever mode or post changes
   useEffect(() => {
-    if (reactRootRef.current) {
-      reactRootRef.current.render(children);
+    if (!reactRootRef.current) return;
+    let content;
+    if (mode === INFO_WINDOW_MODE.EXPANDED) {
+      content = <ExpandedPostBody post={post} onClose={onClose} />;
+    } else {
+      content = <strong onClick={onClick}>{post.title}</strong>;
     }
-  }, [children]);
+    reactRootRef.current.render(content);
+  }, [mode, post, onClick, onClose]);
 
-  // ── 3) Update wrapper’s className & inline styles when styling props change
+  // 3) Update border color & inline styles when category or style change
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    // update CSS classes
     wrapper.className = `custom-info-window ${className}`;
-
-    // pick the right border color
-    const borderColor = CATEGORY_COLORS[category] || CATEGORY_COLORS.default;
-
-    // merge into inline styles
+    const hue = CATEGORY_COLORS[post.category] || CATEGORY_COLORS.default;
     Object.assign(wrapper.style, {
-      border: `2px solid ${borderColor}`,
+      border: `2px solid ${hue}`,
+      cursor: mode === INFO_WINDOW_MODE.MINIMIZED ? 'pointer' : 'default',
       ...style,
     });
-  }, [className, category, style]);
+  }, [className, post.category, style, mode]);
 
-  // ── 4) Create/cleanup the Google Overlay when map/position/onClose change
+  // 4) Attach one click‐at‐large if provided
   useEffect(() => {
-    // remove any old overlay
+    const w = wrapperRef.current;
+    if (!w || !onClick || mode !== INFO_WINDOW_MODE.MINIMIZED) return;
+    w.addEventListener('click', onClick);
+    return () => {
+      w.removeEventListener('click', onClick);
+    };
+  }, [onClick, mode]);
+
+  // 5) Mount/cleanup the Google overlay when map/position change
+  useEffect(() => {
     if (overlayRef.current) {
       overlayRef.current.setMap(null);
       overlayRef.current = null;
     }
-
     if (map && position && wrapperRef.current) {
-      // pass the *actual* HTMLElement into the overlay
       overlayRef.current = FullWidthOverlay(
         map,
         { lat: position.lat, lng: position.lng },
         wrapperRef.current
       );
-
-      // wire up your “×” button if you passed onClose
-      if (onClose) {
-        const btn = wrapperRef.current.querySelector('.close-btn');
-        if (btn) btn.addEventListener('click', onClose);
-      }
     }
-
     return () => {
       if (overlayRef.current) {
         overlayRef.current.setMap(null);
         overlayRef.current = null;
       }
     };
-  }, [map, position, onClose]);
+  }, [map, position]);
 
   return null;
 }
