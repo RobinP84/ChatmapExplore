@@ -10,8 +10,15 @@ import authService                              from './firebase/firebaseAuth';
 import CustomInfoWindow                         from './Components/CustomInfoWindow';
 
 const containerStyle = { width: '375px', height: '812px' };
-const initialCenter  = { lat: -3.745, lng: -38.523 };
+const initialCenter  = { lat: 59.3293, lng: 18.0686 }; // Stockholm, Sweden
 const libraries      = ['marker'];
+
+const mapOptions = {
+  disableDefaultUI: true,
+  clickableIcons: false,
+  mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
+  gestureHandling: 'greedy',
+};
 
 function MapComponent() {
   const { isLoaded } = useJsApiLoader({
@@ -57,8 +64,12 @@ function MapComponent() {
   }, [markerText]);
 
   const togglePost = useCallback(post => {
-    setSelected(prev => prev?.id === post.id ? null : post);
-  }, []);
+  setSelected(prev => {
+    const next = prev?.id === post.id ? null : post;
+    console.log('togglePost: clicked', post.id, '=> new selectedPost:', next?.id);
+    return next;
+  });
+}, [])
 
   const closeExpanded = useCallback(() => {
     setSelected(null);
@@ -92,10 +103,8 @@ function MapComponent() {
         zoom={10}
         onLoad={onLoad}
         onUnmount={onUnmount}
-        gestureHandling="greedy"
-        disableDefaultUI
         onClick={handleMapClick}
-        options={{ mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID }}
+        options={mapOptions}
       >
         {/* 1) “Make a post” marker */}
         {markerLocation && (
@@ -136,6 +145,8 @@ function MapComponent() {
           const mode = selectedPost?.id === post.id
             ? INFO_WINDOW_MODE.EXPANDED
             : INFO_WINDOW_MODE.MINIMIZED;
+
+            console.log('Post', post.id, 'selectedPost:', selectedPost?.id, 'mode:', mode);
 
           return (
             <React.Fragment key={post.id}>

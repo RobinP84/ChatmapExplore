@@ -5,8 +5,8 @@ const mockPosts = [
     title: "Hello World",
     message: "This is my first mock post!",
     category: "sports",      // ← renamed here
-    postLocationLat: -3.745,
-    postLocationLong: -38.523,
+    postLocationLat: 59.3293,
+    postLocationLong: 18.0686,
     rating: 5,
     added: new Date().toISOString(),
     expire: new Date(Date.now() + 86400000).toISOString(),
@@ -18,8 +18,8 @@ const mockPosts = [
     title: "Another Post",
     message: "Here is another sample post.",
     category: "nightlife",   // ← and here
-    postLocationLat: -3.75,
-    postLocationLong: -38.52,
+    postLocationLat: 59.2893,
+    postLocationLong: 18.0686,
     rating: 4,
     added: new Date().toISOString(),
     expire: new Date(Date.now() + 172800000).toISOString(),
