@@ -1,6 +1,6 @@
 // src/hooks/usePosts.js
 import { useState, useEffect, useCallback } from "react";
-import * as PostRepository from "../services/postRepository";
+import * as PostService from "../services/postService";
 
 export function usePosts(viewedArea) {
   const [posts, setPosts] = useState([]);
@@ -9,7 +9,7 @@ export function usePosts(viewedArea) {
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const fetchedPosts = await PostRepository.fetchPosts(viewedArea);
+      const fetchedPosts = await PostService.fetchPosts(viewedArea);
       setPosts(fetchedPosts);
     } catch (error) {
       console.error("Error loading posts:", error);

@@ -4,6 +4,7 @@ import { GoogleMap, useJsApiLoader }            from '@react-google-maps/api';
 import { INFO_WINDOW_MODE }                     from './constants/infoWindowModes';
 import AdvancedMarker                           from './MarkerComponent';
 import { usePosts }                             from './hooks/usePosts';
+import { useCreatePost } from './hooks/useCreatePost';
 import { MakePostIcon, PostMarkerIcon }         from './Components/CustomMarkerIcon';
 import LoginButton                              from './Components/loginButtonComponent';
 import authService                              from './firebase/firebaseAuth';
@@ -39,6 +40,8 @@ function MapComponent() {
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
   });
+
+  const { createPost, loading: creating } = useCreatePost();
 
   useEffect(() => authService.onAuthStateChanged(u => setUser(u)), []);
 
@@ -127,6 +130,22 @@ function MapComponent() {
           <CustomInfoWindow
             map={map}
             position={markerLocation}
+            mode={INFO_WINDOW_MODE.MAKE_POST}    // explicitly choose “make post”
+            onClose={() => setEditing(false)}
+            onSave={({ title, message }) =>
+              createPost({
+                title,
+                message,
+                lat:    markerLocation.lat,
+                lng:    markerLocation.lng,
+                category: 'default', // or however you choose categories
+                userId: user.uid,
+              }).then(() => {
+                reloadPosts();
+                setEditing(false);
+                setMarker(null);
+              })
+            }
           >
             <input
               type="text"

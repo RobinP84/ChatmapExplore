@@ -5,6 +5,7 @@ import FullWidthOverlay      from './FullWidthOverlay';
 import { CATEGORY_COLORS }   from '../constants/categoryColors';
 import { INFO_WINDOW_MODE }  from '../constants/infoWindowModes';
 import ExpandedPostBody      from './ExpandedPostBody';
+import MakePostBody      from './MakePostBody';
 
 export default function CustomInfoWindow({
   map,
@@ -37,27 +38,38 @@ export default function CustomInfoWindow({
   useEffect(() => {
     if (!reactRootRef.current) return;
     let content;
-    if (mode === INFO_WINDOW_MODE.EXPANDED) {
+
+    if (mode === INFO_WINDOW_MODE.MAKE_POST) {
+      content = <MakePostBody onClose={onClose} onSave={createPost} />;
+    }
+    else if (mode === INFO_WINDOW_MODE.EXPANDED) {
       content = <ExpandedPostBody post={post} onClose={onClose} />;
-    } else {
+    }
+    else {
       content = <strong onClick={onClick}>{post.title}</strong>;
     }
+
     reactRootRef.current.render(content);
   }, [mode, post, onClick, onClose]);
 
   // 3) Update border color & inline styles when category or style change
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+  const wrapper = wrapperRef.current;
+  if (!wrapper) return;
 
-    wrapper.className = `custom-info-window ${className}`;
-    const hue = CATEGORY_COLORS[post.category] || CATEGORY_COLORS.default;
-    Object.assign(wrapper.style, {
-      border: `2px solid ${hue}`,
-      cursor: mode === INFO_WINDOW_MODE.MINIMIZED ? 'pointer' : 'default',
-      ...style,
-    });
-  }, [className, post.category, style, mode]);
+  wrapper.className = `custom-info-window ${className}`;
+
+  // If we're in MAKE_POST mode, just use the default color:
+  const hue = mode === INFO_WINDOW_MODE.MAKE_POST
+    ? CATEGORY_COLORS.default
+    : (CATEGORY_COLORS[post?.category] || CATEGORY_COLORS.default);
+
+  Object.assign(wrapper.style, {
+    border: `2px solid ${hue}`,
+    cursor: mode === INFO_WINDOW_MODE.MINIMIZED ? 'pointer' : 'default',
+    ...style,
+  });
+}, [className, style, mode, post]);
 
   // 4) Attach one click‐at‐large if provided
   useEffect(() => {
