@@ -4,7 +4,7 @@ import { GoogleMap, useJsApiLoader }            from '@react-google-maps/api';
 import { INFO_WINDOW_MODE }                     from './constants/infoWindowModes';
 import AdvancedMarker                           from './MarkerComponent';
 import { usePosts }                             from './hooks/usePosts';
-import { useCreatePost } from './hooks/useCreatePost';
+import { useCreatePost }                        from './hooks/useCreatePost';
 import { MakePostIcon, PostMarkerIcon }         from './Components/CustomMarkerIcon';
 import LoginButton                              from './Components/loginButtonComponent';
 import authService                              from './firebase/firebaseAuth';
@@ -16,9 +16,9 @@ const libraries      = ['marker'];
 
 const mapOptions = {
   disableDefaultUI: true,
-  clickableIcons: false,
-  mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
-  gestureHandling: 'greedy',
+  clickableIcons:   false,
+  mapId:            import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
+  gestureHandling:  'greedy',
 };
 
 function MapComponent() {
@@ -36,29 +36,40 @@ function MapComponent() {
   const [user, setUser]            = useState(null);
   const [selectedPost, setSelected]= useState(null);
 
+  // ① memoize closeMakePost so it never changes identity unless `setEditing` changes:
+  const closeMakePost = useCallback(() => {
+    setEditing(false);
+  }, []);   // no dependencies other than setEditing()
+
+  // ① Fetch existing posts via your hook
   const { posts, loading, reloadPosts } = usePosts({
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
   });
 
+  // ② Hook to insert new posts
   const { createPost, loading: creating } = useCreatePost();
 
+  // Watch auth state
   useEffect(() => authService.onAuthStateChanged(u => setUser(u)), []);
 
   const onLoad    = useCallback(m => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
+  // When you click on the map background, place a “new post” marker
   const handleMapClick = useCallback(e => {
     setMarker({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     setEditing(false);
     setSavedText('');
   }, []);
 
+  // When that “new post” marker is clicked, open the form
   const handleMarkerClick = useCallback(() => {
     setEditing(true);
     setMarkerText(savedText);
   }, [savedText]);
 
+  // Handle “Enter” key inside the inline input (if you want text‐only markers)
   const handleInputKeyDown = useCallback(e => {
     if (e.key === 'Enter') {
       setSavedText(markerText);
@@ -66,13 +77,13 @@ function MapComponent() {
     }
   }, [markerText]);
 
+  // Toggle selection of a post (open/close the expanded InfoWindow)
   const togglePost = useCallback(post => {
-  setSelected(prev => {
-    const next = prev?.id === post.id ? null : post;
-    console.log('togglePost: clicked', post.id, '=> new selectedPost:', next?.id);
-    return next;
-  });
-}, [])
+    setSelected(prev => {
+      const next = prev?.id === post.id ? null : post;
+      return next;
+    });
+  }, []);
 
   const closeExpanded = useCallback(() => {
     setSelected(null);
@@ -82,7 +93,7 @@ function MapComponent() {
 
   return (
     <div>
-            {/* NAV BAR */}
+      {/* NAV BAR */}
       <div className="nav-bar">
         {user ? (
           <button onClick={() => window.location.href = '/profile'}>
@@ -116,9 +127,9 @@ function MapComponent() {
             position={markerLocation}
             onClick={handleMarkerClick}
           >
-            <MakePostIcon/>
+            <MakePostIcon />
             {savedText && (
-              <div className="marker-label" style={{ /*…*/ }}>
+              <div className="marker-label" style={{ /* your styles */ }}>
                 {savedText}
               </div>
             )}
@@ -130,42 +141,32 @@ function MapComponent() {
           <CustomInfoWindow
             map={map}
             position={markerLocation}
-            mode={INFO_WINDOW_MODE.MAKE_POST}    // explicitly choose “make post”
+            mode={INFO_WINDOW_MODE.MAKE_POST}  // “create new post” mode
             onClose={() => setEditing(false)}
             onSave={({ title, message }) =>
               createPost({
                 title,
                 message,
-                lat:    markerLocation.lat,
-                lng:    markerLocation.lng,
-                category: 'default', // or however you choose categories
-                userId: user.uid,
+                lat:      markerLocation.lat,
+                lng:      markerLocation.lng,
+                category: 'default',      // or however you choose categories
+                userId:   user.uid,       // pass current user’s ID
               }).then(() => {
+                // After creation: refresh posts and close the form
                 reloadPosts();
                 setEditing(false);
                 setMarker(null);
               })
             }
-          >
-            <input
-              type="text"
-              value={markerText}
-              onChange={e => setMarkerText(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="Enter text and press Enter"
-              autoFocus
-              style={{ width:200, padding:4 }}
-            />
-          </CustomInfoWindow>
+          />
         )}
 
-        {/* 3 & 4) Minimized & Expanded for each post */}
+        {/* 3 & 4) Minimized & Expanded InfoWindows for each existing post */}
         {posts.map(post => {
-          const mode = selectedPost?.id === post.id
-            ? INFO_WINDOW_MODE.EXPANDED
-            : INFO_WINDOW_MODE.MINIMIZED;
-
-            console.log('Post', post.id, 'selectedPost:', selectedPost?.id, 'mode:', mode);
+          const mode =
+            selectedPost?.id === post.id
+              ? INFO_WINDOW_MODE.EXPANDED
+              : INFO_WINDOW_MODE.MINIMIZED;
 
           return (
             <React.Fragment key={post.id}>
@@ -177,7 +178,7 @@ function MapComponent() {
                 }}
                 onClick={() => togglePost(post)}
               >
-                <PostMarkerIcon/>
+                <PostMarkerIcon />
               </AdvancedMarker>
 
               <CustomInfoWindow
