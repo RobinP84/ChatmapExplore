@@ -11,7 +11,7 @@ import authService                              from './firebase/firebaseAuth';
 import CustomInfoWindow                         from './Components/CustomInfoWindow';
 
 const containerStyle = { width: '375px', height: '812px' };
-const initialCenter  = { lat: 59.3293, lng: 18.0686 }; // Stockholm, Sweden
+const initialCenter  = { lat: 59.3293, lng: 18.0686 };
 const libraries      = ['marker'];
 
 const mapOptions = {
@@ -36,12 +36,7 @@ function MapComponent() {
   const [user, setUser]            = useState(null);
   const [selectedPost, setSelected]= useState(null);
 
-  // ① memoize closeMakePost so it never changes identity unless `setEditing` changes:
-  const closeMakePost = useCallback(() => {
-    setEditing(false);
-  }, []);   // no dependencies other than setEditing()
-
-  // ① Fetch existing posts via your hook
+  // ① Fetch existing posts
   const { posts, loading, reloadPosts } = usePosts({
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
@@ -50,34 +45,26 @@ function MapComponent() {
   // ② Hook to insert new posts
   const { createPost, loading: creating } = useCreatePost();
 
-  // Watch auth state
+  // Listen to auth state
   useEffect(() => authService.onAuthStateChanged(u => setUser(u)), []);
 
   const onLoad    = useCallback(m => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
-  // When you click on the map background, place a “new post” marker
+  // When you click on the map, drop a marker for “new post”
   const handleMapClick = useCallback(e => {
     setMarker({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     setEditing(false);
     setSavedText('');
   }, []);
 
-  // When that “new post” marker is clicked, open the form
+  // When that “new post” marker is clicked, show the form
   const handleMarkerClick = useCallback(() => {
     setEditing(true);
     setMarkerText(savedText);
   }, [savedText]);
 
-  // Handle “Enter” key inside the inline input (if you want text‐only markers)
-  const handleInputKeyDown = useCallback(e => {
-    if (e.key === 'Enter') {
-      setSavedText(markerText);
-      setEditing(false);
-    }
-  }, [markerText]);
-
-  // Toggle selection of a post (open/close the expanded InfoWindow)
+  // Toggle an existing post’s InfoWindow
   const togglePost = useCallback(post => {
     setSelected(prev => {
       const next = prev?.id === post.id ? null : post;
@@ -89,6 +76,37 @@ function MapComponent() {
     setSelected(null);
   }, []);
 
+  // ── 1) Memoize the “close the make‐post popup” handler
+  const closeMakePost = useCallback(() => {
+    setEditing(false);
+  }, []);
+
+  // ── 2) Memoize the “save new post” handler
+  const handleSaveCreatePost = useCallback(
+    ({ title, message }) => {
+      if (!markerLocation || !user) {
+        return Promise.resolve();
+      }
+      return createPost({
+        title,
+        message,
+        lat:      markerLocation.lat,
+        lng:      markerLocation.lng,
+        category: 'default',
+        userId:   user.uid,
+      })
+      .then(() => {
+        reloadPosts();        // refresh the list after inserting
+        setEditing(false);
+        setMarker(null);
+      })
+      .catch(err => {
+        console.error('Error creating post:', err);
+      });
+    },
+    [createPost, markerLocation, user, reloadPosts]
+  );
+
   if (!isLoaded) return <div>Loading Map…</div>;
 
   return (
@@ -96,7 +114,7 @@ function MapComponent() {
       {/* NAV BAR */}
       <div className="nav-bar">
         {user ? (
-          <button onClick={() => window.location.href = '/profile'}>
+          <button onClick={() => (window.location.href = '/profile')}>
             <svg width={32} height={32} aria-hidden="true">
               <use href="#icon-user" />
             </svg>
@@ -117,7 +135,7 @@ function MapComponent() {
         zoom={10}
         onLoad={onLoad}
         onUnmount={onUnmount}
-        onClick={handleMapClick}
+        onClick={handleMapClick}       // clicking map closes the “make post” popup
         options={mapOptions}
       >
         {/* 1) “Make a post” marker */}
@@ -136,28 +154,14 @@ function MapComponent() {
           </AdvancedMarker>
         )}
 
-        {/* 2) Edit‐input popup */}
+        {/* 2) Edit‐input popup (MAKE_POST mode) */}
         {markerLocation && editingMarker && (
           <CustomInfoWindow
             map={map}
             position={markerLocation}
-            mode={INFO_WINDOW_MODE.MAKE_POST}  // “create new post” mode
-            onClose={() => setEditing(false)}
-            onSave={({ title, message }) =>
-              createPost({
-                title,
-                message,
-                lat:      markerLocation.lat,
-                lng:      markerLocation.lng,
-                category: 'default',      // or however you choose categories
-                userId:   user.uid,       // pass current user’s ID
-              }).then(() => {
-                // After creation: refresh posts and close the form
-                reloadPosts();
-                setEditing(false);
-                setMarker(null);
-              })
-            }
+            mode={INFO_WINDOW_MODE.MAKE_POST}
+            onClose={closeMakePost}                   // memoized
+            onSave={handleSaveCreatePost}             // memoized
           />
         )}
 

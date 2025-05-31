@@ -27,6 +27,8 @@ export default function CustomInfoWindow({
     const wrapper = document.createElement('div');
     
     // ─ Stop click events from bubbling to the underlying map:
+    wrapper.addEventListener('mousedown', e => e.stopPropagation());
+    wrapper.addEventListener('touchstart', e => e.stopPropagation());
     wrapper.addEventListener('click', e => {
       e.stopPropagation();
     });
