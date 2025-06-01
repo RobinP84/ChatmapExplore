@@ -3,7 +3,7 @@
 /**
  * A factory function that creates a `google.maps.OverlayView` which:
  *  1. Appends your `wrapperElement` into the floatPane.
- *  2. Measures the map’s width and the wrapper’s height, then positions
+ *  2. Computes the map’s width and the wrapper’s height, then positions
  *     the wrapper so that its BOTTOM center matches the marker location.
  *
  * Usage:
@@ -18,26 +18,28 @@
  */
 export default function FullWidthOverlay(map, position, wrapperElement) {
   if (!map || !window.google || !window.google.maps) {
-    throw new Error('Google Maps JS API not loaded yet');
+    throw new Error("Google Maps JS API not loaded yet");
   }
 
   const overlay = new window.google.maps.OverlayView();
 
   // Save these for use inside onAdd/draw/onRemove:
-  overlay._position = position;         // {lat, lng}
+  overlay._position = position;         // { lat: number, lng: number }
   overlay._wrapper = wrapperElement;    // The <div> into which CustomInfoWindow rendered React content
 
-  overlay.onAdd = function() {
-    // Put the wrapper into the floatPane so it sits above markers
+  // Called when the overlay is first added to the map: add the wrapper <div> to the pane.
+  overlay.onAdd = function () {
     const panes = this.getPanes();
     if (panes && panes.floatPane) {
-      this._wrapper.style.position = 'absolute';
-      this._wrapper.style.boxSizing = 'border-box';
+      // Ensure the wrapper is absolutely positioned:
+      this._wrapper.style.position = "absolute";
+      this._wrapper.style.boxSizing = "border-box";
       panes.floatPane.appendChild(this._wrapper);
     }
   };
 
-  overlay.draw = function() {
+  // Called each time the map “needs redraw”: position & size the wrapper.
+  overlay.draw = function () {
     const projection = this.getProjection();
     if (!projection) return;
 
@@ -53,15 +55,15 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     const mapDiv = map.getDiv();             // e.g. <div class="gm-style">…</div>
     const mapWidth = mapDiv.offsetWidth || 0;
 
-    // Now measure the wrapper’s height
+    // Now measure the wrapper’s height (after React has rendered into it)
     const wrapperEl = this._wrapper;
     const wrapperHeight = wrapperEl.offsetHeight || 0;
 
-    // Set wrapper width (you can remove the -32 if you want true full-bleed):
-    const desiredWidth = mapWidth - 32; // leaves 16px margin on each side
+    // Set wrapper width (you can remove the “-32” if you want true edge‐to‐edge):
+    const desiredWidth = mapWidth;
     wrapperEl.style.width = `${desiredWidth}px`;
 
-    // Position: we want the BOTTOM‐CENTER of the wrapper to be at (point.x, point.y):
+    // Position so that the BOTTOM‐CENTER of the wrapper sits at (point.x, point.y):
     const left = point.x - desiredWidth / 2;
     const top = point.y - wrapperHeight;
 
@@ -69,13 +71,14 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     wrapperEl.style.top = `${top}px`;
   };
 
-  overlay.onRemove = function() {
+  // Called when .setMap(null) is used: remove wrapper from DOM
+  overlay.onRemove = function () {
     if (this._wrapper && this._wrapper.parentNode) {
       this._wrapper.parentNode.removeChild(this._wrapper);
     }
   };
 
-  // Finally, attach it to the map:
+  // Finally, attach it to the map (this triggers onAdd() → draw())
   overlay.setMap(map);
 
   return overlay;

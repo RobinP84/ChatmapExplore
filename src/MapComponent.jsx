@@ -1,4 +1,5 @@
 // src/MapComponent.jsx
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { INFO_WINDOW_MODE } from './constants/infoWindowModes';
@@ -44,7 +45,7 @@ function MapComponent() {
   const [user, setUser]                 = useState(null);
 
   // ─── Firestore + TanStack Query (v5) ─────────────────────
-  // Customize viewedArea as needed; here it’s hard‐coded
+  // (Customize viewedArea as needed; here it’s hard‐coded)
   const viewedArea = {
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
@@ -75,7 +76,7 @@ function MapComponent() {
   }, []);
 
   // ─── Google Map callbacks ──────────────────────────────────
-  const onLoad = useCallback((m) => setMap(m), []);
+  const onLoad    = useCallback((m) => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
   const handleMapClick = useCallback(

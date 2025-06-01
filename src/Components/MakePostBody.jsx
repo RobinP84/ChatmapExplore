@@ -1,6 +1,17 @@
 // src/Components/MakePostBody.jsx
+
 import React, { useState } from 'react';
 
+/**
+ * MakePostBody displays:
+ *   • an <input> for the post title
+ *   • a <textarea> for the post message
+ *   • “Cancel” and “Post” buttons
+ *
+ * Props:
+ *   - onClose  (function) to cancel/close the “make post” form
+ *   - onSave   (function) called as onSave({ title, message })
+ */
 export default function MakePostBody({ onClose, onSave }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');

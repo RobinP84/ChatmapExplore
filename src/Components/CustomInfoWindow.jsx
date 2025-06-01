@@ -1,26 +1,33 @@
 // src/Components/CustomInfoWindow.jsx
 
 import React, { useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
-import FullWidthOverlay from './FullWidthOverlay';
-import { CATEGORY_COLORS } from '../constants/categoryColors';
+import { createRoot }       from 'react-dom/client';
+import FullWidthOverlay     from './FullWidthOverlay';
+import { CATEGORY_COLORS }  from '../constants/categoryColors';
 import { INFO_WINDOW_MODE } from '../constants/infoWindowModes';
-import ExpandedPostBody from './ExpandedPostBody';
-import MakePostBody from './MakePostBody';
+import ExpandedPostBody     from './ExpandedPostBody';
+import MakePostBody         from './MakePostBody';
 
 /**
+ * CustomInfoWindow is the “wrapper” that:
+ *  1. Creates an empty <div> (stored in wrapperRef.current).
+ *  2. Instantiates a FullWidthOverlay(map, position, wrapperDiv).
+ *  3. Whenever `mode` or `post` changes:
+ *     • We re‐render React content (either MakePostBody, ExpandedPostBody, or just <strong>title</strong>).
+ *     • FullWidthOverlay.draw() repositions the wrapper above the marker.
+ *
  * Props:
- *   - map:         google.maps.Map
- *   - position:    { lat: number, lng: number }
- *   - post:        { id, title, message, category, … } OR undefined if MAKE_POST
- *   - mode:        one of INFO_WINDOW_MODE.{MINIMIZED, EXPANDED, MAKE_POST}
- *   - onClick:     callback when minimized window is clicked
- *   - onClose:     callback to close expanded window
- *   - onSave:      callback to save new post (in MAKE_POST mode)
- *   - onFavorite:  callback to favorite a post (in EXPANDED mode)
- *   - isFavorited: boolean, whether the post is currently favorited
- *   - className:   optional additional CSS class for the wrapper
- *   - style:       optional inline style for the wrapper
+ *   - map         (google.maps.Map)
+ *   - position    ({ lat: number, lng: number })
+ *   - post        ({ id, title, message, category, … }) OR undefined if mode === MAKE_POST
+ *   - mode        one of INFO_WINDOW_MODE.{MINIMIZED, EXPANDED, MAKE_POST}
+ *   - onClick     callback when MINIMIZED wrapper is clicked
+ *   - onClose     callback when EXPANDED is closed
+ *   - onSave      callback when “Post” is clicked in MAKE_POST
+ *   - onFavorite  callback when “Favorite” is clicked in EXPANDED
+ *   - isFavorited boolean whether this post is already a favorite
+ *   - className   optional CSS class for the wrapper
+ *   - style       optional inline CSS for the wrapper
  */
 export default function CustomInfoWindow({
   map,
@@ -33,26 +40,26 @@ export default function CustomInfoWindow({
   onFavorite,
   isFavorited,
   className = '',
-  style = {},
+  style     = {},
 }) {
-  const overlayRef   = useRef(null);   // Will hold the OverlayView instance
-  const wrapperRef   = useRef(null);   // Will be the <div> that React renders into
-  const reactRootRef = useRef(null);   // Holds React Root for rendering into wrapper
+  const overlayRef   = useRef(null);   // Will hold the FullWidthOverlay instance
+  const wrapperRef   = useRef(null);   // Will hold the <div> into which we render React content
+  const reactRootRef = useRef(null);   // Will hold the React root for `createRoot(wrapper)`
 
-  // ── 1) Create wrapper <div> & React root ONCE
+  // ── 1) On mount: create wrapper <div> and React root ONCE
   useEffect(() => {
-    // Create a <div> to hold our InfoWindow content:
     const wrapper = document.createElement('div');
     wrapper.className = `custom-info-window ${className}`;
 
-    // Save it in a ref so we can pass it to FullWidthOverlay later
-    wrapperRef.current = wrapper;
+    // Prevent clicks from propagating down to Google Map behind:
+    wrapper.addEventListener('mousedown', e => e.stopPropagation());
+    wrapper.addEventListener('touchstart', e => e.stopPropagation());
 
-    // Create a React root so we can call root.render(...) at will:
-    reactRootRef.current = ReactDOM.createRoot(wrapper);
+    wrapperRef.current = wrapper;
+    reactRootRef.current = createRoot(wrapper);
 
     return () => {
-      // Cleanup: unmount React from that wrapper <div> when CustomInfoWindow unmounts
+      // On unmount: defer unmount so it never runs mid‐render:
       const r = reactRootRef.current;
       if (r) {
         Promise.resolve().then(() => r.unmount());
@@ -62,15 +69,17 @@ export default function CustomInfoWindow({
     };
   }, [className]);
 
-  // ── 2) Render inner content whenever mode, post, or callbacks change
+  // ── 2) Whenever `mode` or `post` or callbacks change, re‐render the inner React content
   useEffect(() => {
     if (!reactRootRef.current) return;
 
-    let contentNode;
+    let content = null;
     if (mode === INFO_WINDOW_MODE.MAKE_POST) {
-      contentNode = <MakePostBody onClose={onClose} onSave={onSave} />;
+      // Show the “Make a Post” form
+      content = <MakePostBody onClose={onClose} onSave={onSave} />;
     } else if (mode === INFO_WINDOW_MODE.EXPANDED) {
-      contentNode = (
+      // Show the expanded post (title/message/chat/favorite/close)
+      content = (
         <ExpandedPostBody
           post={post}
           onClose={onClose}
@@ -79,30 +88,23 @@ export default function CustomInfoWindow({
         />
       );
     } else {
-      // MINIMIZED: Just show the title (we attach the click listener to the wrapper)
-      contentNode = (
-        <div
-          style={{
-            cursor: 'pointer',
-            userSelect: 'none',
-            padding: '0 4px',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <strong>{post.title}</strong>
-        </div>
+      // MINIMIZED: show only the title; clicking it toggles expansion
+      content = (
+        <strong onClick={onClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
+          {post.title}
+        </strong>
       );
     }
 
-    reactRootRef.current.render(contentNode);
-  }, [mode, post, onClose, onSave, onFavorite, isFavorited]);
+    reactRootRef.current.render(content);
+  }, [mode, post, onClick, onClose, onSave, onFavorite, isFavorited]);
 
-  // ── 3) Update wrapper styles + click listener whenever mode/post/style change
+  // ── 3) Whenever `mode` or `post` or `style` changes, update wrapper’s CSS + click listener
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    // Decide border color from category or default:
+    // Decide border color (default for MAKE_POST, otherwise based on category)
     const hue =
       mode === INFO_WINDOW_MODE.MAKE_POST
         ? CATEGORY_COLORS.default
@@ -117,8 +119,8 @@ export default function CustomInfoWindow({
       ...style,
     });
 
-    // If minimized, clicking anywhere on this wrapper should expand:
-    function handleWrapperClick() {
+    // If we are MINIMIZED, clicking anywhere in the wrapper should expand:
+    function handleWrapperClick(e) {
       if (mode === INFO_WINDOW_MODE.MINIMIZED && onClick) {
         onClick();
       }
@@ -135,21 +137,22 @@ export default function CustomInfoWindow({
     };
   }, [mode, post, onClick, style]);
 
-  // ── 4) (Re)mount or remove the FullWidthOverlay whenever map or position change
+  // ── 4) Whenever `map` or `position` changes, (re)mount the FullWidthOverlay
   useEffect(() => {
-    // If an existing overlay is already on the map, remove it first
+    // Clean up any existing overlay first:
     if (overlayRef.current) {
       overlayRef.current.setMap(null);
       overlayRef.current = null;
     }
 
-    // Only create a new overlay if map & position & wrapper are all ready
     if (map && position && wrapperRef.current) {
+      // Instantiate a new FullWidthOverlay(map, position, wrapperDiv)
       overlayRef.current = FullWidthOverlay(
         map,
         position,
         wrapperRef.current
       );
+      // (FullWidthOverlay’s constructor already calls setMap(map))
     }
 
     return () => {
@@ -160,5 +163,5 @@ export default function CustomInfoWindow({
     };
   }, [map, position]);
 
-  return null; // This component does not render into the normal React DOM tree
+  return null; // This component never renders any DOM in React’s main tree
 }
