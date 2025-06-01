@@ -1,11 +1,11 @@
 // src/Components/CustomInfoWindow.jsx
 import React, { useEffect, useRef } from 'react';
-import { createRoot }       from 'react-dom/client';
-import FullWidthOverlay     from './FullWidthOverlay';
-import { CATEGORY_COLORS }  from '../constants/categoryColors';
+import { createRoot } from 'react-dom/client';
+import FullWidthOverlay from './FullWidthOverlay';
+import { CATEGORY_COLORS } from '../constants/categoryColors';
 import { INFO_WINDOW_MODE } from '../constants/infoWindowModes';
-import ExpandedPostBody     from './ExpandedPostBody';
-import MakePostBody         from './MakePostBody';
+import ExpandedPostBody from './ExpandedPostBody';
+import MakePostBody from './MakePostBody';
 
 export default function CustomInfoWindow({
   map,
@@ -14,7 +14,9 @@ export default function CustomInfoWindow({
   mode = INFO_WINDOW_MODE.MINIMIZED,
   onClick,
   onClose,
-  onSave,           // ← newly accepted prop for MAKE_POST
+  onSave,          // for MAKE_POST
+  onFavorite,      // for EXPANDED
+  isFavorited,     // for EXPANDED
   className = '',
   style     = {},
 }) {
@@ -25,52 +27,82 @@ export default function CustomInfoWindow({
   // ── 1) Create the wrapper & React root ONCE
   useEffect(() => {
     const wrapper = document.createElement('div');
-    
-    // ─ Stop click events from bubbling to the underlying map:
+
+    // ─ Stop mousedown/touchstart so clicks don’t fall through to the map
     wrapper.addEventListener('mousedown', e => e.stopPropagation());
     wrapper.addEventListener('touchstart', e => e.stopPropagation());
-    wrapper.addEventListener('click', e => {
-      e.stopPropagation();
-    });
+    // (We do NOT stop "click" here, so we can attach it below.)
 
     wrapperRef.current = wrapper;
     reactRootRef.current = createRoot(wrapper);
 
     return () => {
-      // Defer unmount so it never runs mid-render
+      // Clean up React root
       const r = reactRootRef.current;
-      Promise.resolve().then(() => r.unmount());
+      if (r) {
+        Promise.resolve().then(() => r.unmount());
+      }
       reactRootRef.current = null;
     };
   }, []);
 
-  // ── 2) Render whenever mode, post, or callbacks change
+  // ── 2) When mode changes, attach or remove a 'click' listener on wrapper
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    function handleWrapperClick(e) {
+      // Only call onClick if we're in MINIMIZED mode
+      if (mode === INFO_WINDOW_MODE.MINIMIZED && typeof onClick === 'function') {
+        onClick(e);
+      }
+    }
+
+    if (mode === INFO_WINDOW_MODE.MINIMIZED) {
+      wrapper.addEventListener('click', handleWrapperClick);
+    } else {
+      wrapper.removeEventListener('click', handleWrapperClick);
+    }
+
+    return () => {
+      wrapper.removeEventListener('click', handleWrapperClick);
+    };
+  }, [mode, onClick]);
+
+  // ── 3) Render whatever belongs inside (MAKE_POST, EXPANDED, or MINIMIZED)
   useEffect(() => {
     if (!reactRootRef.current) return;
 
     let content;
     if (mode === INFO_WINDOW_MODE.MAKE_POST) {
-      // Render the “make a post” form
+      // “make a post” form
       content = <MakePostBody onClose={onClose} onSave={onSave} />;
     } else if (mode === INFO_WINDOW_MODE.EXPANDED) {
-      // Render an expanded post + chat
-      content = <ExpandedPostBody post={post} onClose={onClose} />;
+      // Expanded post + chat + favorite button
+      content = (
+        <ExpandedPostBody
+          post={post}
+          onClose={onClose}
+          onFavorite={onFavorite}
+          isFavorited={isFavorited}
+        />
+      );
     } else {
-      // MINIMIZED: just show the title (post must exist here)
-      content = <strong onClick={onClick}>{post.title}</strong>;
+      // MINIMIZED: just show the title
+      content = <strong style={{ cursor: 'pointer' }}>{post.title}</strong>;
+      // We no longer rely on <strong onClick={…}>, since the wrapper itself handles clicks
     }
 
     reactRootRef.current.render(content);
-  }, [mode, post, onClick, onClose, onSave]);
+  }, [mode, post, onClose, onSave, onFavorite, isFavorited]);
 
-  // ── 3) Update border & inline styles when category/style/mode change
+  // ── 4) Update wrapper styles whenever category/style/mode/post change
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
     wrapper.className = `custom-info-window ${className}`;
 
-    // If we’re in MAKE_POST mode, or if `post` is undefined, just use default color
     const hue =
       mode === INFO_WINDOW_MODE.MAKE_POST
         ? CATEGORY_COLORS.default
@@ -82,16 +114,6 @@ export default function CustomInfoWindow({
       ...style,
     });
   }, [className, style, mode, post]);
-
-  // ── 4) If MINIMIZED, attach a click handler to the wrapper
-  useEffect(() => {
-    const w = wrapperRef.current;
-    if (!w || !onClick || mode !== INFO_WINDOW_MODE.MINIMIZED) return;
-    w.addEventListener('click', onClick);
-    return () => {
-      w.removeEventListener('click', onClick);
-    };
-  }, [onClick, mode]);
 
   // ── 5) Mount / cleanup the Google Overlay when map or position changes
   useEffect(() => {
