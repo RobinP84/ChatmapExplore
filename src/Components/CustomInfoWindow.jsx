@@ -1,60 +1,126 @@
 // src/Components/CustomInfoWindow.jsx
+
 import React, { useEffect, useRef } from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import FullWidthOverlay from './FullWidthOverlay';
 import { CATEGORY_COLORS } from '../constants/categoryColors';
 import { INFO_WINDOW_MODE } from '../constants/infoWindowModes';
 import ExpandedPostBody from './ExpandedPostBody';
 import MakePostBody from './MakePostBody';
 
+/**
+ * Props:
+ *   - map:         google.maps.Map
+ *   - position:    { lat: number, lng: number }
+ *   - post:        { id, title, message, category, … } OR undefined if MAKE_POST
+ *   - mode:        one of INFO_WINDOW_MODE.{MINIMIZED, EXPANDED, MAKE_POST}
+ *   - onClick:     callback when minimized window is clicked
+ *   - onClose:     callback to close expanded window
+ *   - onSave:      callback to save new post (in MAKE_POST mode)
+ *   - onFavorite:  callback to favorite a post (in EXPANDED mode)
+ *   - isFavorited: boolean, whether the post is currently favorited
+ *   - className:   optional additional CSS class for the wrapper
+ *   - style:       optional inline style for the wrapper
+ */
 export default function CustomInfoWindow({
   map,
   position,
-  post,            // { id, title, message, category, … } OR undefined for MAKE_POST
+  post,
   mode = INFO_WINDOW_MODE.MINIMIZED,
   onClick,
   onClose,
-  onSave,          // for MAKE_POST
-  onFavorite,      // for EXPANDED
-  isFavorited,     // for EXPANDED
+  onSave,
+  onFavorite,
+  isFavorited,
   className = '',
-  style     = {},
+  style = {},
 }) {
-  const overlayRef   = useRef(null);
-  const wrapperRef   = useRef(null);
-  const reactRootRef = useRef(null);
+  const overlayRef   = useRef(null);   // Will hold the OverlayView instance
+  const wrapperRef   = useRef(null);   // Will be the <div> that React renders into
+  const reactRootRef = useRef(null);   // Holds React Root for rendering into wrapper
 
-  // ── 1) Create the wrapper & React root ONCE
+  // ── 1) Create wrapper <div> & React root ONCE
   useEffect(() => {
+    // Create a <div> to hold our InfoWindow content:
     const wrapper = document.createElement('div');
+    wrapper.className = `custom-info-window ${className}`;
 
-    // ─ Stop mousedown/touchstart so clicks don’t fall through to the map
-    wrapper.addEventListener('mousedown', e => e.stopPropagation());
-    wrapper.addEventListener('touchstart', e => e.stopPropagation());
-    // (We do NOT stop "click" here, so we can attach it below.)
-
+    // Save it in a ref so we can pass it to FullWidthOverlay later
     wrapperRef.current = wrapper;
-    reactRootRef.current = createRoot(wrapper);
+
+    // Create a React root so we can call root.render(...) at will:
+    reactRootRef.current = ReactDOM.createRoot(wrapper);
 
     return () => {
-      // Clean up React root
+      // Cleanup: unmount React from that wrapper <div> when CustomInfoWindow unmounts
       const r = reactRootRef.current;
       if (r) {
         Promise.resolve().then(() => r.unmount());
       }
       reactRootRef.current = null;
+      wrapperRef.current = null;
     };
-  }, []);
+  }, [className]);
 
-  // ── 2) When mode changes, attach or remove a 'click' listener on wrapper
+  // ── 2) Render inner content whenever mode, post, or callbacks change
+  useEffect(() => {
+    if (!reactRootRef.current) return;
+
+    let contentNode;
+    if (mode === INFO_WINDOW_MODE.MAKE_POST) {
+      contentNode = <MakePostBody onClose={onClose} onSave={onSave} />;
+    } else if (mode === INFO_WINDOW_MODE.EXPANDED) {
+      contentNode = (
+        <ExpandedPostBody
+          post={post}
+          onClose={onClose}
+          onFavorite={onFavorite}
+          isFavorited={isFavorited}
+        />
+      );
+    } else {
+      // MINIMIZED: Just show the title (we attach the click listener to the wrapper)
+      contentNode = (
+        <div
+          style={{
+            cursor: 'pointer',
+            userSelect: 'none',
+            padding: '0 4px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <strong>{post.title}</strong>
+        </div>
+      );
+    }
+
+    reactRootRef.current.render(contentNode);
+  }, [mode, post, onClose, onSave, onFavorite, isFavorited]);
+
+  // ── 3) Update wrapper styles + click listener whenever mode/post/style change
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    function handleWrapperClick(e) {
-      // Only call onClick if we're in MINIMIZED mode
-      if (mode === INFO_WINDOW_MODE.MINIMIZED && typeof onClick === 'function') {
-        onClick(e);
+    // Decide border color from category or default:
+    const hue =
+      mode === INFO_WINDOW_MODE.MAKE_POST
+        ? CATEGORY_COLORS.default
+        : (CATEGORY_COLORS[post?.category] || CATEGORY_COLORS.default);
+
+    Object.assign(wrapper.style, {
+      backgroundColor: 'white',
+      border: `2px solid ${hue}`,
+      borderRadius: '8px',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+      padding: '0.5rem',
+      ...style,
+    });
+
+    // If minimized, clicking anywhere on this wrapper should expand:
+    function handleWrapperClick() {
+      if (mode === INFO_WINDOW_MODE.MINIMIZED && onClick) {
+        onClick();
       }
     }
 
@@ -67,67 +133,25 @@ export default function CustomInfoWindow({
     return () => {
       wrapper.removeEventListener('click', handleWrapperClick);
     };
-  }, [mode, onClick]);
+  }, [mode, post, onClick, style]);
 
-  // ── 3) Render whatever belongs inside (MAKE_POST, EXPANDED, or MINIMIZED)
+  // ── 4) (Re)mount or remove the FullWidthOverlay whenever map or position change
   useEffect(() => {
-    if (!reactRootRef.current) return;
-
-    let content;
-    if (mode === INFO_WINDOW_MODE.MAKE_POST) {
-      // “make a post” form
-      content = <MakePostBody onClose={onClose} onSave={onSave} />;
-    } else if (mode === INFO_WINDOW_MODE.EXPANDED) {
-      // Expanded post + chat + favorite button
-      content = (
-        <ExpandedPostBody
-          post={post}
-          onClose={onClose}
-          onFavorite={onFavorite}
-          isFavorited={isFavorited}
-        />
-      );
-    } else {
-      // MINIMIZED: just show the title
-      content = <strong style={{ cursor: 'pointer' }}>{post.title}</strong>;
-      // We no longer rely on <strong onClick={…}>, since the wrapper itself handles clicks
-    }
-
-    reactRootRef.current.render(content);
-  }, [mode, post, onClose, onSave, onFavorite, isFavorited]);
-
-  // ── 4) Update wrapper styles whenever category/style/mode/post change
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    wrapper.className = `custom-info-window ${className}`;
-
-    const hue =
-      mode === INFO_WINDOW_MODE.MAKE_POST
-        ? CATEGORY_COLORS.default
-        : (CATEGORY_COLORS[post?.category] || CATEGORY_COLORS.default);
-
-    Object.assign(wrapper.style, {
-      border: `2px solid ${hue}`,
-      cursor: mode === INFO_WINDOW_MODE.MINIMIZED ? 'pointer' : 'default',
-      ...style,
-    });
-  }, [className, style, mode, post]);
-
-  // ── 5) Mount / cleanup the Google Overlay when map or position changes
-  useEffect(() => {
+    // If an existing overlay is already on the map, remove it first
     if (overlayRef.current) {
       overlayRef.current.setMap(null);
       overlayRef.current = null;
     }
+
+    // Only create a new overlay if map & position & wrapper are all ready
     if (map && position && wrapperRef.current) {
       overlayRef.current = FullWidthOverlay(
         map,
-        { lat: position.lat, lng: position.lng },
+        position,
         wrapperRef.current
       );
     }
+
     return () => {
       if (overlayRef.current) {
         overlayRef.current.setMap(null);
@@ -136,5 +160,5 @@ export default function CustomInfoWindow({
     };
   }, [map, position]);
 
-  return null;
+  return null; // This component does not render into the normal React DOM tree
 }

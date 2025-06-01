@@ -1,30 +1,34 @@
 // src/Components/ExpandedPostBody.jsx
+// src/Components/ExpandedPostBody.jsx
 import React, { useState, useCallback } from 'react';
 import ChatThread from './ChatThread';
 
 function ExpandedPostBody({ post, onClose, onFavorite, isFavorited }) {
   const [showChat, setShowChat] = useState(false);
   const toggleChat = useCallback(() => {
-    setShowChat(v => !v);
+    setShowChat((v) => !v);
   }, []);
 
   return (
     <>
-      <h3>{post.title}</h3>
-      <p>{post.message}</p>
-      <div className="actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-        {/* Close button */}
-        <button className="close-btn" onClick={onClose}>
+      <h3 style={{ margin: '0 0 0.5rem 0' }}>{post.title}</h3>
+      <p style={{ margin: '0 0 1rem 0' }}>{post.message}</p>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            fontSize: '1.25rem',
+            cursor: 'pointer',
+          }}
+        >
           ×
         </button>
-
-        {/* Favorite / Unfavorite button */}
-        <button onClick={onFavorite}>
+        <button onClick={onFavorite} style={{ cursor: 'pointer' }}>
           {isFavorited ? '★ Unfavorite' : '☆ Favorite'}
         </button>
-
-        {/* Show / Hide Chat toggle */}
-        <button onClick={toggleChat}>
+        <button onClick={toggleChat} style={{ cursor: 'pointer' }}>
           {showChat ? 'Hide Chat' : 'Show Chat'}
         </button>
       </div>
