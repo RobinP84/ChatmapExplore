@@ -4,6 +4,8 @@ import React, { useState, useCallback } from 'react';
 import ChatThread from './ChatThread';
 
 function ExpandedPostBody({ post, onClose, onFavorite, isFavorited }) {
+  console.log('Post clicked');
+  console.log('ExpandedPostBody got post=', post);
   const [showChat, setShowChat] = useState(false);
   const toggleChat = useCallback(() => {
     setShowChat((v) => !v);
