@@ -1,3 +1,4 @@
+// src/hooks/useLocations.js
 import { useState, useEffect } from 'react';
 import { fetchLocations, saveLocation } from './repositories/firebaseRepository';
 

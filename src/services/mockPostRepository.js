@@ -1,3 +1,4 @@
+// src/services/mockPostRepository.js
 const mockPosts = [
   {
     id: "1",

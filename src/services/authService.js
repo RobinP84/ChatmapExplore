@@ -1,3 +1,4 @@
+// src/firebase/firebaseAuth.js
 import * as firebaseAuth from "../firebase/firebaseAuth";
 
 // You could structure this as an object with methods

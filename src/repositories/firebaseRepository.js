@@ -1,6 +1,6 @@
 // src/repositories/firebaseRepository.js
 import { getFirestore, collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { firebaseApp } from "../firebaseConfig";
+import { firebaseApp } from "../firebase/firebaseConfig";
 
 const db = getFirestore(firebaseApp);
 
