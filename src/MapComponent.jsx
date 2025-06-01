@@ -5,7 +5,8 @@ import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { INFO_WINDOW_MODE } from './constants/infoWindowModes';
 import AdvancedMarker from './MarkerComponent';
 import { useCreatePost } from './hooks/useCreatePost';
-import { useFirebasePosts } from './hooks/useFirebasePosts';
+//import { useFirebasePosts } from './hooks/useFirebasePosts';
+import { usePosts }         from './hooks/usePosts';
 import { useLocalHistory } from './hooks/useLocalHistory';
 import { useLocalFavorites } from './hooks/useLocalFavorites';
 import { useUIStore } from './store/uiStore';
@@ -51,11 +52,14 @@ function MapComponent() {
     northeast: { lat: -3.0, lng: -38.0 },
   };
 
-  const {
-    data: posts = [],
-    isLoading: loadingPosts,
-    refetch: reloadPosts,
-  } = useFirebasePosts(viewedArea);
+  // const {
+  //   data: posts = [],
+  //   isLoading: loadingPosts,
+  //   refetch: reloadPosts,
+  // } = useFirebasePosts(viewedArea);
+
+  const { posts, loading: loadingPosts, reloadPosts } = usePosts(viewedArea);
+  console.log("▶️ [usePosts] posts array:", posts);
 
   // ─── Dexie (IndexedDB) ────────────────────────────────────
   const { allHistory, addClosed }       = useLocalHistory();
@@ -131,6 +135,10 @@ function MapComponent() {
   // Filter out any posts whose ID is in “closedPostIds”
   const visiblePosts = posts.filter((p) => !closedPostIds.has(p.id));
 
+  console.log("📚 allHistory from Dexie:", allHistory);
+  console.log("🚫 closedPostIds set:", closedPostIds);
+  console.log("✅ visiblePosts (after filter):", visiblePosts);
+
   return (
     <div>
       {/* ─── NAV BAR ───────────────────────────────────────────── */}
@@ -185,6 +193,7 @@ function MapComponent() {
 
         {/* 3 & 4) For each “visible” post, show marker + InfoWindow */}
         {visiblePosts.map((post) => {
+          console.log("🔎 single post:", post);
           const isExpanded = selectedPostId === post.id;
           const mode = isExpanded
             ? INFO_WINDOW_MODE.EXPANDED
@@ -192,6 +201,7 @@ function MapComponent() {
 
           return (
             <React.Fragment key={post.id}>
+              console.log("📍 Rendering marker for post.id:", post.id);
               <AdvancedMarker
                 map={map}
                 position={{
