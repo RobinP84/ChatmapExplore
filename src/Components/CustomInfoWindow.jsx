@@ -1,6 +1,6 @@
 // src/Components/CustomInfoWindow.jsx
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot }       from 'react-dom/client';
 import FullWidthOverlay     from './FullWidthOverlay';
 import { CATEGORY_COLORS }  from '../constants/categoryColors';
@@ -9,25 +9,10 @@ import ExpandedPostBody     from './ExpandedPostBody';
 import MakePostBody         from './MakePostBody';
 
 /**
- * CustomInfoWindow is the “wrapper” that:
- *  1. Creates an empty <div> (stored in wrapperRef.current).
- *  2. Instantiates a FullWidthOverlay(map, position, wrapperDiv).
- *  3. Whenever `mode` or `post` changes:
- *     • We re‐render React content (either MakePostBody, ExpandedPostBody, or just <strong>title</strong>).
- *     • FullWidthOverlay.draw() repositions the wrapper above the marker.
- *
- * Props:
- *   - map         (google.maps.Map)
- *   - position    ({ lat: number, lng: number })
- *   - post        ({ id, title, message, category, … }) OR undefined if mode === MAKE_POST
- *   - mode        one of INFO_WINDOW_MODE.{MINIMIZED, EXPANDED, MAKE_POST}
- *   - onClick     callback when MINIMIZED wrapper is clicked
- *   - onClose     callback when EXPANDED is closed
- *   - onSave      callback when “Post” is clicked in MAKE_POST
- *   - onFavorite  callback when “Favorite” is clicked in EXPANDED
- *   - isFavorited boolean whether this post is already a favorite
- *   - className   optional CSS class for the wrapper
- *   - style       optional inline CSS for the wrapper
+ * CustomInfoWindow:
+ *   – Creates an empty <div> (wrapperRef.current)
+ *   – Once React has rendered into that <div>, we call FullWidthOverlay(map, position, wrapper)
+ *   – On each “mode” or “post” change, we re‐render React inside that wrapper, then ask the overlay to redraw.
  */
 export default function CustomInfoWindow({
   map,
@@ -42,16 +27,20 @@ export default function CustomInfoWindow({
   className = '',
   style     = {},
 }) {
-  const overlayRef   = useRef(null);   // Will hold the FullWidthOverlay instance
-  const wrapperRef   = useRef(null);   // Will hold the <div> into which we render React content
-  const reactRootRef = useRef(null);   // Will hold the React root for `createRoot(wrapper)`
+  const overlayRef   = useRef(null);   // Holds our OverlayView instance
+  const wrapperRef   = useRef(null);   // Holds the <div> into which React will render
+  const reactRootRef = useRef(null);   // Holds the React root from createRoot()
 
-  // ── 1) On mount: create wrapper <div> and React root ONCE
+  // We track a “readyToDraw” flag so that once React has painted at least once
+  // into wrapperRef.current, we can safely call overlay.draw() and trust offsetHeight.
+  const [readyToDraw, setReadyToDraw] = useState(false);
+
+  // ── 1) On mount: create the wrapper <div> and a React root exactly once
   useEffect(() => {
     const wrapper = document.createElement('div');
     wrapper.className = `custom-info-window ${className}`;
 
-    // Prevent clicks from propagating down to Google Map behind:
+    // Prevent clicks from leaking down to the map:
     wrapper.addEventListener('mousedown', e => e.stopPropagation());
     wrapper.addEventListener('touchstart', e => e.stopPropagation());
 
@@ -59,9 +48,9 @@ export default function CustomInfoWindow({
     reactRootRef.current = createRoot(wrapper);
 
     return () => {
-      // On unmount: defer unmount so it never runs mid‐render:
       const r = reactRootRef.current;
       if (r) {
+        // Defer unmount so it never runs mid‐render:
         Promise.resolve().then(() => r.unmount());
       }
       reactRootRef.current = null;
@@ -69,16 +58,17 @@ export default function CustomInfoWindow({
     };
   }, [className]);
 
-  // ── 2) Whenever `mode` or `post` or callbacks change, re‐render the inner React content
+  // ── 2) Whenever “mode/post” or callbacks change, re‐render React into wrapper.
+  //     Then set readyToDraw=true so that we can schedule a draw pass.
   useEffect(() => {
     if (!reactRootRef.current) return;
 
-    let content = null;
+     console.log("🔄 CustomInfoWindow render effect: mode=", mode, "post.id=", post?.id);
+
+    let content;
     if (mode === INFO_WINDOW_MODE.MAKE_POST) {
-      // Show the “Make a Post” form
       content = <MakePostBody onClose={onClose} onSave={onSave} />;
     } else if (mode === INFO_WINDOW_MODE.EXPANDED) {
-      // Show the expanded post (title/message/chat/favorite/close)
       content = (
         <ExpandedPostBody
           post={post}
@@ -88,7 +78,6 @@ export default function CustomInfoWindow({
         />
       );
     } else {
-      // MINIMIZED: show only the title; clicking it toggles expansion
       content = (
         <strong onClick={onClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
           {post.title}
@@ -97,14 +86,15 @@ export default function CustomInfoWindow({
     }
 
     reactRootRef.current.render(content);
+    // Now React has rendered into wrapperRef.current; schedule a draw pass:
+    setReadyToDraw(true);
   }, [mode, post, onClick, onClose, onSave, onFavorite, isFavorited]);
 
-  // ── 3) Whenever `mode` or `post` or `style` changes, update wrapper’s CSS + click listener
+  // ── 3) Update wrapper’s CSS + click listener whenever mode/post/style changes
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    // Decide border color (default for MAKE_POST, otherwise based on category)
     const hue =
       mode === INFO_WINDOW_MODE.MAKE_POST
         ? CATEGORY_COLORS.default
@@ -119,7 +109,6 @@ export default function CustomInfoWindow({
       ...style,
     });
 
-    // If we are MINIMIZED, clicking anywhere in the wrapper should expand:
     function handleWrapperClick(e) {
       if (mode === INFO_WINDOW_MODE.MINIMIZED && onClick) {
         onClick();
@@ -137,22 +126,21 @@ export default function CustomInfoWindow({
     };
   }, [mode, post, onClick, style]);
 
-  // ── 4) Whenever `map` or `position` changes, (re)mount the FullWidthOverlay
+  // ── 4) Whenever map/position change, (re)mount a brand‐new overlay
   useEffect(() => {
-    // Clean up any existing overlay first:
+    // If there’s an old overlay, remove it
     if (overlayRef.current) {
       overlayRef.current.setMap(null);
       overlayRef.current = null;
     }
 
     if (map && position && wrapperRef.current) {
-      // Instantiate a new FullWidthOverlay(map, position, wrapperDiv)
+      // Create a new OverlayView (this calls onAdd() → draw() internally)
       overlayRef.current = FullWidthOverlay(
         map,
         position,
         wrapperRef.current
       );
-      // (FullWidthOverlay’s constructor already calls setMap(map))
     }
 
     return () => {
@@ -163,5 +151,15 @@ export default function CustomInfoWindow({
     };
   }, [map, position]);
 
-  return null; // This component never renders any DOM in React’s main tree
+  // ── 5) Once React has updated the wrapper’s content (readyToDraw === true),
+  //     force a redraw so FullWidthOverlay.draw() sees the correct wrapper height.
+  useEffect(() => {
+    if (readyToDraw && overlayRef.current) {
+      // Call draw() so it re‐measures wrapper.offsetHeight (which is now accurate).
+      overlayRef.current.draw();
+      setReadyToDraw(false);
+    }
+  }, [readyToDraw]);
+
+  return null; // This component never renders anything in the normal React tree
 }
