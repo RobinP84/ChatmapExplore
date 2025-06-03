@@ -222,7 +222,7 @@ function MapComponent() {
                   lat: post.postLocationLat,
                   lng: post.postLocationLong,
                 }}
-                post={post}
+                post={post}                
                 mode={mode}
                 category={post.category}
                 onClick={() => handleTogglePost(post)}
