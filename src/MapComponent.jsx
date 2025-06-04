@@ -58,10 +58,17 @@ function MapComponent() {
   } = usePosts(viewedArea);
 
   // ─── Normalize IDs to strings (so Zustand’s selectedPostId is always a string)
+  // const posts = React.useMemo(() => {
+  //   return rawPosts.map((p) => ({
+  //     ...p,
+  //     id: String(p.id),
+  //   }));
+  // }, [rawPosts]);
+
   const posts = React.useMemo(() => {
     return rawPosts.map((p) => ({
       ...p,
-      id: String(p.id),
+      id: p.id,
     }));
   }, [rawPosts]);
 
@@ -242,7 +249,8 @@ function MapComponent() {
                 onClose={() => handleCloseInfoWindow(post.id)}
                 onFavorite={() => addFavorite(post.id)}
                 isFavorited={allFavorites.some(
-                  (f) => String(f.postId) === post.id
+                  // (f) => String(f.postId) === post.id
+                  (f) => f.postId === post.id
                 )}
               />
             </React.Fragment>
