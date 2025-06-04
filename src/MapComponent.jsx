@@ -52,9 +52,9 @@ function MapComponent() {
 
   // ─── Fetch posts from “mock” or Firebase ───────────────────
   const {
-    posts: rawPosts = [],     // raw array from your mock hook
-    loading: loadingPosts,    // boolean
-    reloadPosts,              // function
+    data: rawPosts = [],
+    isLoading: loadingPosts,
+    refetch: reloadPosts,
   } = usePosts(viewedArea);
 
   // ─── Normalize IDs to strings (so Zustand’s selectedPostId is always a string)

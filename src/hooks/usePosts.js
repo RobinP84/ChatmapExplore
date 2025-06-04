@@ -1,28 +1,14 @@
 // src/hooks/usePosts.js
-import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import * as PostService from "../services/postService";
 
 export function usePosts(viewedArea) {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadPosts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const fetchedPosts = await PostService.fetchPosts(viewedArea);
-      setPosts(fetchedPosts);
-    } catch (error) {
-      console.error("Error loading posts:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [viewedArea]);
-
-  useEffect(() => {
-    if (viewedArea) {
-      loadPosts();
-    }
-  }, [loadPosts, viewedArea]);
-
-  return { posts, loading, reloadPosts: loadPosts };
+  return useQuery({
+    queryKey: ["posts", viewedArea],               // ①
+    queryFn: () => PostService.fetchPosts(viewedArea), // ②
+    enabled: false,                                 // ③
+    staleTime: 1000 * 60 * 5,                       // ④
+    retry: 2,                                       // ⑤
+    refetchOnWindowFocus: false,                    // ⑥
+  });
 }
