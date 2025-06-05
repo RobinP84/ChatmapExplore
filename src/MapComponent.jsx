@@ -68,7 +68,7 @@ function MapComponent() {
   //    (If `CATEGORY_ID_TO_NAME[p.categoryId]` is missing, we use 'default')
   const posts = React.useMemo(() => {
     return rawPosts.map((p) => {
-      const idStr       = String(p.id);
+      const idStr       = p.id;
       const categoryStr = CATEGORY_ID_TO_NAME[p.categoryId] || 'default';
       return {
         ...p,
