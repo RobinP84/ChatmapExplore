@@ -4,7 +4,7 @@ import { GoogleMap, useJsApiLoader }           from '@react-google-maps/api';
 import { INFO_WINDOW_MODE }                     from './constants/infoWindowModes';
 import AdvancedMarker                           from './MarkerComponent';
 import { useCreatePost }                        from './hooks/useCreatePost';
-import { usePosts }                             from './hooks/usePosts';        // mock or Firebase
+import { usePosts }                             from './hooks/usePosts';
 import { useLocalHistory }                      from './hooks/useLocalHistory';
 import { useLocalFavorites }                    from './hooks/useLocalFavorites';
 import { useUIStore }                           from './store/uiStore';
@@ -26,49 +26,40 @@ const mapOptions     = {
 };
 
 function MapComponent() {
-  // ─── 1) Load Google Maps JS API ──────────────────────────
+  // ─── HOOK 1: load Google Maps JS API ────────────────────────────────
   const { isLoaded } = useJsApiLoader({
     id:               import.meta.env.VITE_GOOGLE_MAPS_API_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries,
   });
 
-  // ─── 2) Zustand (UI state) ────────────────────────────────
-  // selectedPostId = the ID (string) of whichever post is currently expanded (or null)
+  // ─── HOOK 2: Zustand (“which post is expanded?”, “make‐post open?”) ──────
   const selectedPostId    = useUIStore((s) => s.selectedPostId);
   const setSelectedPostId = useUIStore((s) => s.setSelectedPostId);
-
-  // isMakePostOpen = whether we’re currently showing the “create a new post” form
   const isMakePostOpen    = useUIStore((s) => s.isMakePostOpen);
   const setIsMakePostOpen = useUIStore((s) => s.setIsMakePostOpen);
 
-  // ─── 3) React local state ─────────────────────────────────
+  // ─── HOOKs 3–5: React local state for map, marker, user ────────────────
   const [map,            setMap]            = useState(null);
   const [markerLocation, setMarkerLocation] = useState(null);
   const [user,           setUser]           = useState(null);
 
-  // ─── 4) Hard‐coded “viewed area” ─────────────────────────
-  // (You can change these bounds however you like)
+  // ─── HOOK 6: Fetch “viewed area” posts via React Query (or your mock) ─
   const viewedArea = {
     southwest: { lat: -4.0, lng: -39.0 },
     northeast: { lat: -3.0, lng: -38.0 },
   };
 
-  // ─── 5) Fetch posts via React Query (or your mock hook) ──
   const {
-    data: rawPosts = [],      // raw array of posts (each has .rating, .categoryId, etc.)
-    isLoading: loadingPosts,  // whether the query is in flight
-    refetch: reloadPosts,     // manually trigger a re‐fetch
+    data: rawPosts = [],     // raw array of posts (may each have .rating, .categoryId, etc.)
+    isLoading: loadingPosts, // boolean
+    refetch: reloadPosts,    // function to manually re‐fetch
   } = usePosts(viewedArea);
 
-  // ─── 6) Normalize each raw post in one pass ───────────────
-  //     • Ensure `id` is a string
-  //     • Turn integer categoryId → string category
-  //
-  //    (If `CATEGORY_ID_TO_NAME[p.categoryId]` is missing, we use 'default')
+  // ─── HOOK 7: Normalize each raw post so we have “.id” as string & “.category” as name ─
   const posts = React.useMemo(() => {
     return rawPosts.map((p) => {
-      const idStr       = p.id;
+      const idStr       = String(p.id);
       const categoryStr = CATEGORY_ID_TO_NAME[p.categoryId] || 'default';
       return {
         ...p,
@@ -78,34 +69,31 @@ function MapComponent() {
     });
   }, [rawPosts]);
 
-  // ─── 7) Dexie (IndexedDB) “closed posts” ───────────────────
-  //    Every time a user closes an expanded InfoWindow, we call `addClosed(postId)`.
-  //    Then `allHistory` contains records `{ postId: 'someId', … }`.
-  //    We extract the set of `closedPostIds` so that they will no longer be shown.
-  //
+  // ─── HOOK 8: Dexie (IndexedDB) “closed posts” & “favorites” ─────────
   const { allHistory, addClosed }     = useLocalHistory();
   const { allFavorites, addFavorite } = useLocalFavorites();
 
+  // Build a Set of all “closedPostIds” so we can filter them out:
   const closedPostIds = React.useMemo(
     () => new Set(allHistory.map((h) => h.postId)),
     [allHistory]
   );
 
-  // ─── 8) Hook to create a new post (unchanged) ─────────────
+  // ─── HOOK 9: Hook to create a new post (unchanged) ───────────────
   const { createPost, loading: creating } = useCreatePost();
 
-  // ─── 9) Firebase Auth listener ────────────────────────────
+  // ─── HOOK 10: Firebase Auth listener ───────────────────────────
   useEffect(() => {
     return authService.onAuthStateChanged((u) => {
       setUser(u);
     });
   }, []);
 
-  // ─── 10) Google Map callbacks ─────────────────────────────
+  // ─── HOOK 11: Google Map callbacks (onLoad / onUnmount) ──────────
   const onLoad    = useCallback((m) => setMap(m), []);
   const onUnmount = useCallback(() => setMap(null), []);
 
-  // ─── 11) “Make a post” marker handlers ────────────────────
+  // ─── HOOK 12: “Make a post” marker handlers ───────────────────────
   const handleMapClick = useCallback(
     (e) => {
       setMarkerLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
@@ -126,7 +114,7 @@ function MapComponent() {
         message,
         lat:      markerLocation.lat,
         lng:      markerLocation.lng,
-        category: 'default',  // or let user pick a real category
+        category: 'default',
         userId:   user.uid,
       });
       reloadPosts();
@@ -136,56 +124,53 @@ function MapComponent() {
     [createPost, markerLocation, user, reloadPosts]
   );
 
-  // ─── 12) “Toggle MINIMIZED ↔ EXPANDED” for an existing post ─
+  // ─── HOOK 13: “Toggle MINIMIZED ↔ EXPANDED” for an existing post ───
   const handleTogglePost = useCallback(
     (post) => {
       console.log('👆 Post clicked, post.id =', post.id);
       if (selectedPostId === post.id) {
-        // Already expanded → collapse it
         setSelectedPostId(null);
       } else {
-        // Minimized → expand it
         setSelectedPostId(post.id);
       }
     },
     [selectedPostId, setSelectedPostId]
   );
 
-  // ─── 13) “Close an expanded InfoWindow” (mark as “closed forever”) ─
+  // ─── HOOK 14: “Close an expanded InfoWindow” → record in history so it won’t reappear ─
   const handleCloseInfoWindow = useCallback(
     (postId) => {
-      addClosed(postId);        // record in Dexie → won’t show again
-      setSelectedPostId(null);  // collapse it if it was expanded
+      addClosed(postId);        // Adds to Dexie → closedPostIds will update
+      setSelectedPostId(null);
     },
     [addClosed, setSelectedPostId]
   );
 
-  if (!isLoaded) return <div>Loading Map…</div>;
-
-  // ─── 14) Filter + sort + slice so that at most 5 are shown ─────────────
-  //
-  //   a) Sort all the normalized `posts` by `rating` descending:
-  //      (you may need to adjust if `rating` is nested somewhere else)
-  //   b) Filter out any whose `id` is in `closedPostIds`.
-  //   c) Take `.slice(0, 5)` so that no more than 5 InfoWindows are rendered.
-  //
+  // ─── HOOK 15: Sort / filter / slice → pick at most 5 posts, in descending rating ───
   const displayedPosts = React.useMemo(() => {
-    // (a) pure copy + sort by rating descending:
+    // a) Sort all posts by rating descending (newest first if same rating)
     const sortedByRating = [...posts].sort(
       (a, b) => (b.rating ?? 0) - (a.rating ?? 0)
     );
 
-    // (b) filter out any that have been “closed”
+    // b) Filter out any that have been closed (closedPostIds)
     const stillAlive = sortedByRating.filter((p) => !closedPostIds.has(p.id));
 
-    // (c) only show the top 5:
+    // c) Keep only the top 5
     return stillAlive.slice(0, 5);
   }, [posts, closedPostIds]);
 
-  // ─── 15) Finally, render the map + markers + InfoWindows ────────────────
+  // ─── NOW: Because _all_ of the hooks above have been called, React’s hook order is stable. ─
+  //      We can safely short‐circuit rendering if the map library hasn’t loaded yet.
+
+  if (!isLoaded) {
+    return <div>Loading Map…</div>;
+  }
+
+  // ─── Final JSX: render the GoogleMap, the “new post” marker, and up to five displayedPosts ─
   return (
     <div>
-      {/* ─── NAV BAR ───────────────────────────────────────────── */}
+      {/* ─── NAV BAR ────────────────────────────────────────── */}
       <div className="nav-bar">
         {user ? (
           <button onClick={() => (window.location.href = '/profile')}>
@@ -196,7 +181,6 @@ function MapComponent() {
         ) : (
           <LoginButton />
         )}
-        {/* Re‐fetch from server (or mock) when clicked; disabled while loading */}
         <button onClick={reloadPosts} disabled={loadingPosts}>
           <svg width={32} height={32} aria-hidden="true">
             <use href="#icon-search" />
@@ -210,10 +194,10 @@ function MapComponent() {
         zoom={10}
         onLoad={onLoad}
         onUnmount={onUnmount}
-        onClick={handleMapClick} // click on empty map → place “new post” marker
+        onClick={handleMapClick}  // click on “blank map” → place new‐post marker
         options={mapOptions}
       >
-        {/* ─── 1) “Make a post” marker (new post) ─────────────────────────── */}
+        {/* ─── 1) “Make a post” marker (for creating a new post) ─────────── */}
         {markerLocation && (
           <AdvancedMarker
             map={map}
@@ -224,7 +208,7 @@ function MapComponent() {
           </AdvancedMarker>
         )}
 
-        {/* ─── 2) InfoWindow for creating a post (MAKE_POST mode) ──────────── */}
+        {/* ─── 2) InfoWindow for “MAKE_POST” mode (when user clicked blank map) ─── */}
         {markerLocation && isMakePostOpen && (
           <CustomInfoWindow
             map={map}
@@ -235,15 +219,12 @@ function MapComponent() {
           />
         )}
 
-        {/* ─── 3 & 4) For each of the (at most) 5 displayedPosts: render them ─── */}
+        {/* ─── 3 & 4) For each of the (at most) five displayedPosts: render marker & InfoWindow ─ */}
         {displayedPosts.map((post) => {
           const isExpanded = selectedPostId === post.id;
           const mode       = isExpanded
             ? INFO_WINDOW_MODE.EXPANDED
             : INFO_WINDOW_MODE.MINIMIZED;
-
-          // Figure out the border color for this post’s category:
-          const borderHue = CATEGORY_COLORS[post.category] || CATEGORY_COLORS.default;
 
           console.log(
             '⏺ rendering post.id:', post.id,
@@ -255,7 +236,7 @@ function MapComponent() {
 
           return (
             <React.Fragment key={post.id}>
-              {/* a) Show the pin for this post */}
+              {/* a) Pin for this post */}
               <AdvancedMarker
                 map={map}
                 position={{
@@ -267,7 +248,7 @@ function MapComponent() {
                 <PostMarkerIcon />
               </AdvancedMarker>
 
-              {/* b) Show its CustomInfoWindow (either minimized or expanded) */}
+              {/* b) CustomInfoWindow (minimized or expanded) */}
               <CustomInfoWindow
                 map={map}
                 position={{
@@ -276,7 +257,7 @@ function MapComponent() {
                 }}
                 post={post}
                 mode={mode}
-                category={post.category}       // e.g. "sports"
+                category={post.category}
                 onClick={() => handleTogglePost(post)}
                 onClose={() => handleCloseInfoWindow(post.id)}
                 onFavorite={() => addFavorite(post.id)}
