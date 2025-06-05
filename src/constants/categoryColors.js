@@ -1,3 +1,4 @@
+// src/constants/categoryColors.jsx
 export const CATEGORY_COLORS = {
   news:   '#e74c3c',
   sports: '#3498db',

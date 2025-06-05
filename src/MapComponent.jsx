@@ -13,6 +13,7 @@ import { MakePostIcon, PostMarkerIcon }    from './Components/CustomMarkerIcon';
 import LoginButton                         from './Components/loginButtonComponent';
 import authService                         from './firebase/firebaseAuth';
 import CustomInfoWindow                    from './Components/CustomInfoWindow';
+import { CATEGORY_ID_TO_NAME } from './constants/categoryMap';
 
 const containerStyle = { width: '375px', height: '812px' };
 const initialCenter  = { lat: 59.3293, lng: 18.0686 };
@@ -57,20 +58,26 @@ function MapComponent() {
     refetch: reloadPosts,
   } = usePosts(viewedArea);
 
-  // ─── Normalize IDs to strings (so Zustand’s selectedPostId is always a string)
   // const posts = React.useMemo(() => {
   //   return rawPosts.map((p) => ({
   //     ...p,
-  //     id: String(p.id),
+  //     id: p.id,
   //   }));
   // }, [rawPosts]);
 
+  // 2) Normalize via useMemo:
   const posts = React.useMemo(() => {
-    return rawPosts.map((p) => ({
-      ...p,
-      id: p.id,
-    }));
+    return rawPosts.map(p => {
+      // Look up that integer:
+      const categoryName = CATEGORY_ID_TO_NAME[p.categoryId] || 'default';
+      return {
+        ...p,
+        id:       p.id,    // (if you still want to ensure `id` is a string)
+        category: categoryName,    // add `category: 'sports'` (for example)
+      };
+    });
   }, [rawPosts]);
+  
 
   // ─── Dexie (IndexedDB) ────────────────────────────────────
   const { allHistory, addClosed }     = useLocalHistory();
@@ -220,6 +227,7 @@ function MapComponent() {
           console.log(
             '⏺ rendering post.id:', post.id,
             'selectedPostId:', selectedPostId,
+            'category:', post.category,
             '→ isExpanded=', isExpanded ? 'YES' : 'no'
           );
 
