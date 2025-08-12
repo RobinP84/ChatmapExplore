@@ -9,6 +9,9 @@ import App from './App.jsx'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './Components/CustomInfoWindow.css'
 
+console.log("VITE MODE:", import.meta.env.MODE);
+console.log("process.env.NODE_ENV:", process.env.NODE_ENV);
+
 // 2) Instantiate a QueryClient
 const queryClient = new QueryClient()
 

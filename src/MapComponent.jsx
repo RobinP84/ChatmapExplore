@@ -147,6 +147,7 @@ function MapComponent() {
   );
 
   // ─── HOOK 15: Sort / filter / slice → pick at most 5 posts, in descending rating ───
+  // My note: Is it better to filter closed posts in the backend or here? If in the backend, we could avoid sending them to the client, but that would require backend data processing. Wich would be most efficient/cost effective?
   const displayedPosts = React.useMemo(() => {
     // a) Sort all posts by rating descending (newest first if same rating)
     const sortedByRating = [...posts].sort(
