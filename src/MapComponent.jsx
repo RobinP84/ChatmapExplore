@@ -1,5 +1,5 @@
 // src/MapComponent.jsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { INFO_WINDOW_MODE } from './constants/infoWindowModes';
 import AdvancedMarker from './MarkerComponent';
@@ -23,6 +23,9 @@ const mapOptions = {
   mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
   gestureHandling: 'greedy',
 };
+
+// Cooldown after pressing Search (ms)
+const SEARCH_COOLDOWN_MS = 800;
 
 /* === Bounds helpers (top-level) === */
 function lngInRange(lng, west, east) {
@@ -55,15 +58,26 @@ function MapComponent() {
   const [markerLocation, setMarkerLocation] = useState(null);
   const [user, setUser] = useState(null);
 
-  // ─── HOOK 6: live view bounds (used for fetching + filtering) ───────
-  const [viewBounds, setViewBounds] = React.useState(null);
+  // ─── HOOK 6: live vs frozen bounds ──────────────────────────────────
+  // liveBounds  → updates on every pan/zoom (drives on-screen filtering)
+  // queryBounds → frozen snapshot used for server fetch (changes only on Search)
+  const [liveBounds, setLiveBounds] = useState(null);
+  const [queryBounds, setQueryBounds] = useState(null);
+
+  // Category filter for searches (wire your real UI into this later)
+  // null/undefined means "all categories"
+  const [categoryFilter, setCategoryFilter] = useState(null);
+
+  // Cooldown tracking for the Search button
+  const [isCoolingDown, setIsCoolingDown] = useState(false);
+  const pendingRefetch = useRef(false);
+  const cooldownTimerRef = useRef(null);
 
   const onLoad = useCallback((m) => {
     setMap(m);
-    // Seed bounds immediately if available
     const b = m.getBounds?.();
     if (b) {
-      setViewBounds({
+      setLiveBounds({
         southwest: b.getSouthWest().toJSON(),
         northeast: b.getNorthEast().toJSON(),
       });
@@ -72,38 +86,49 @@ function MapComponent() {
 
   const onUnmount = useCallback(() => setMap(null), []);
 
-  const handleIdle = React.useCallback(() => {
+  const handleIdle = useCallback(() => {
     if (!map) return;
     const b = map.getBounds?.();
     if (!b) return;
-    setViewBounds({
+    setLiveBounds({
       southwest: b.getSouthWest().toJSON(),
       northeast: b.getNorthEast().toJSON(),
     });
   }, [map]);
 
-  // ─── HOOK 7: Fetch posts for the current bounds ─────────────────────
-  // Ensure your usePosts hook handles null/undefined bounds (e.g., using React Query's enabled: !!bounds)
+  // ─── HOOK 7: Fetch posts for the *frozen* params only (manual trigger) ─
   const {
     data: rawPosts = [],
     isLoading: loadingPosts,
-    refetch: reloadPosts,
-  } = usePosts(viewBounds);
+    isFetching, // fetching state after initial load
+    refetch: refetchPosts,
+  } = usePosts(
+    queryBounds ? { bounds: queryBounds, categories: categoryFilter } : null,
+    { enabled: false, keepPreviousData: true }
+  );
+
+  // When frozen params change (set by Search), run the fetch exactly once
+  useEffect(() => {
+    if (pendingRefetch.current && queryBounds) {
+      pendingRefetch.current = false;
+      refetchPosts();
+    }
+  }, [queryBounds, refetchPosts]);
+
+  useEffect(() => () => clearTimeout(cooldownTimerRef.current), []);
 
   // ─── HOOK 8: Normalize incoming posts ───────────────────────────────
   const posts = React.useMemo(() => {
-    return rawPosts.map((p) => {
-      const idStr = String(p.id);
-      const categoryStr = CATEGORY_ID_TO_NAME[p.categoryId] || 'default';
-      return {
-        ...p,
-        id: idStr,
-        category: categoryStr,
-      };
-    });
+    return (rawPosts || []).map((p) => ({
+      ...p,
+      id: String(p.id),
+      category: CATEGORY_ID_TO_NAME?.[p.categoryId] || 'default',
+    }));
   }, [rawPosts]);
 
   // ─── HOOK 9: Dexie (IndexedDB) history & favorites ──────────────────
+  // NOTE: These hooks indicate IndexedDB (Dexie) IS used in your project already.
+  // They persist "closed posts" and "favorites".
   const { allHistory, addClosed } = useLocalHistory();
   const { allFavorites, addFavorite } = useLocalFavorites();
 
@@ -116,9 +141,7 @@ function MapComponent() {
   const { createPost, loading: creating } = useCreatePost();
 
   // ─── HOOK 11: Auth listener ─────────────────────────────────────────
-  useEffect(() => {
-    return authService.onAuthStateChanged((u) => setUser(u));
-  }, []);
+  useEffect(() => authService.onAuthStateChanged((u) => setUser(u)), []);
 
   // ─── HOOK 12: Map interactions ──────────────────────────────────────
   const handleMapClick = useCallback(
@@ -142,11 +165,12 @@ function MapComponent() {
         category: 'default',
         userId: user.uid,
       });
-      reloadPosts();
+      // re-fetch only if a search area has been frozen previously
+      if (queryBounds) refetchPosts();
       setIsMakePostOpen(false);
       setMarkerLocation(null);
     },
-    [createPost, markerLocation, user, reloadPosts]
+    [createPost, markerLocation, user, queryBounds, refetchPosts]
   );
 
   // ─── HOOK 13: Post expand/minimize/close ────────────────────────────
@@ -166,40 +190,64 @@ function MapComponent() {
     [addClosed, setSelectedPostId]
   );
 
-  // ─── HOOK 14: Compute displayed posts (filter in-view → exclude closed → sort → slice) ─
+  // ─── HOOK 14: Compute displayed posts (local filtering every pan) ───
   const displayedPosts = React.useMemo(() => {
-    // 1) Only posts in the current viewport
-    const inView = viewBounds
-      ? posts.filter((p) =>
-          isInBounds(Number(p.postLocationLat), Number(p.postLocationLong), viewBounds)
+    const base = posts;
+
+    // Filter by current viewport locally (no server call)
+    const inView = liveBounds
+      ? base.filter((p) =>
+          isInBounds(Number(p.postLocationLat), Number(p.postLocationLong), liveBounds)
         )
-      : posts;
+      : base;
 
-    // 2) Exclude posts the user has closed
-    const visibleAndOpen = inView.filter((p) => !closedPostIds.has(String(p.id)));
+    // Optionally filter by currently chosen categories locally too
+    const byCategory = Array.isArray(categoryFilter) && categoryFilter.length
+      ? inView.filter((p) => categoryFilter.includes(p.category))
+      : inView;
 
-    // 3) Sort by rating, then createdAt (if present)
+    // Exclude closed
+    const visibleAndOpen = byCategory.filter((p) => !closedPostIds.has(String(p.id)));
+
+    // Sort by rating, tie-breaker createdAt
     const toTime = (v) => {
       if (!v) return 0;
       const t = typeof v === 'number' ? v : new Date(v).getTime();
       return Number.isFinite(t) ? t : 0;
-      };
+    };
     const sorted = [...visibleAndOpen].sort((a, b) => {
       const dr = (b.rating ?? 0) - (a.rating ?? 0);
       if (dr !== 0) return dr;
       return toTime(b.createdAt) - toTime(a.createdAt);
     });
 
-    // 4) Cap how many to show at once
     return sorted.slice(0, 5);
-  }, [posts, viewBounds, closedPostIds]);
+  }, [posts, liveBounds, categoryFilter, closedPostIds]);
+
+  // ─── SEARCH button behavior ─────────────────────────────────────────
+  const onSearch = useCallback(() => {
+    if (!liveBounds || isCoolingDown || loadingPosts || isFetching) return;
+
+    // Freeze the current viewport and categories for the query
+    setQueryBounds(liveBounds);
+    // if you add UI to set categories, ensure categoryFilter is updated before this line
+    // (we already read it directly from state)
+    pendingRefetch.current = true;
+
+    // Start cooldown
+    setIsCoolingDown(true);
+    clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = setTimeout(() => setIsCoolingDown(false), SEARCH_COOLDOWN_MS);
+  }, [liveBounds, isCoolingDown, loadingPosts, isFetching]);
+
+  const searchDisabled = !liveBounds || isCoolingDown || loadingPosts || isFetching || creating;
+  const searchIconStyle = searchDisabled ? { filter: 'grayscale(1)', opacity: 0.5 } : undefined;
 
   // ─── Early out while the Maps JS API loads ──────────────────────────
   if (!isLoaded) {
     return <div>Loading Map…</div>;
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────
   return (
     <div>
       {/* NAV BAR */}
@@ -213,8 +261,8 @@ function MapComponent() {
         ) : (
           <LoginButton />
         )}
-        <button onClick={reloadPosts} disabled={loadingPosts || creating}>
-          <svg width={32} height={32} aria-hidden="true">
+        <button onClick={onSearch} disabled={searchDisabled} title={isCoolingDown ? 'Please wait…' : 'Search'}>
+          <svg width={32} height={32} aria-hidden="true" style={searchIconStyle}>
             <use href="#icon-search" />
           </svg>
         </button>
