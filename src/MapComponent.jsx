@@ -5,6 +5,7 @@ import { INFO_WINDOW_MODE } from './constants/infoWindowModes';
 import AdvancedMarker from './MarkerComponent';
 import { useCreatePost } from './hooks/useCreatePost';
 import { usePosts } from './hooks/usePosts';
+import { useLocalPosts } from './hooks/useLocalPosts';
 import { useLocalHistory } from './hooks/useLocalHistory';
 import { useLocalFavorites } from './hooks/useLocalFavorites';
 import { useUIStore } from './store/uiStore';
@@ -98,9 +99,9 @@ function MapComponent() {
 
   // ─── HOOK 7: Fetch posts for the *frozen* params only (manual trigger) ─
   const {
-    data: rawPosts = [],
+    data: fetchedPosts = [],
     isLoading: loadingPosts,
-    isFetching, // fetching state after initial load
+    isFetching,
     refetch: refetchPosts,
   } = usePosts(
     queryBounds ? { bounds: queryBounds, categories: categoryFilter } : null,
@@ -118,13 +119,42 @@ function MapComponent() {
   useEffect(() => () => clearTimeout(cooldownTimerRef.current), []);
 
   // ─── HOOK 8: Normalize incoming posts ───────────────────────────────
+  // Live posts from local IndexedDB (update automatically after fetches)
+  const localRows = useLocalPosts(liveBounds, categoryFilter);
+  const hasLocalRows = Array.isArray(localRows) && localRows.length > 0;
+  const hasFetchedRows = Array.isArray(fetchedPosts) && fetchedPosts.length > 0;
+
+  useEffect(() => {
+    if (!hasLocalRows && hasFetchedRows) {
+      console.info('[MapComponent] Dexie cache empty; using fetched posts as a fallback for rendering.');
+    }
+  }, [hasLocalRows, hasFetchedRows]);
+
   const posts = React.useMemo(() => {
-    return (rawPosts || []).map((p) => ({
-      ...p,
-      id: String(p.id),
-      category: CATEGORY_ID_TO_NAME?.[p.categoryId] || 'default',
-    }));
-  }, [rawPosts]);
+    const rows = hasLocalRows ? localRows : fetchedPosts;
+
+    const toNumberOrNull = (value) => {
+      if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    return (rows || [])
+      .map((p) => {
+        const lat = toNumberOrNull(p.postLocationLat ?? p.lat);
+        const lng = toNumberOrNull(p.postLocationLong ?? p.lng);
+        if (lat === null || lng === null) return null;
+
+        return {
+          ...p,
+          id: String(p.id),
+          postLocationLat: lat,
+          postLocationLong: lng,
+          category: CATEGORY_ID_TO_NAME?.[p.categoryId] || p.category || 'default',
+        };
+      })
+      .filter(Boolean);
+  }, [hasLocalRows, localRows, fetchedPosts]);
 
   // ─── HOOK 9: Dexie (IndexedDB) history & favorites ──────────────────
   // NOTE: These hooks indicate IndexedDB (Dexie) IS used in your project already.
