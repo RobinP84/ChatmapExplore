@@ -27,14 +27,21 @@ function toNumberOrNull(v) {
 
 /** Upsert an array of posts into IndexedDB. */
 export async function upsertPosts(posts) {
+  if (import.meta.env.DEV) {
+    console.info('[Dexie] upsertPosts invoked', Array.isArray(posts) ? posts.length : posts);
+  }
   if (!Array.isArray(posts) || posts.length === 0) return;
   const normalized = posts.map((p) => ({
     ...p,
     // Ensure lat/lng are numbers so our indexed range queries work reliably
-    postLocationLat: toNumberOrNull(p.postLocationLat),
-    postLocationLong: toNumberOrNull(p.postLocationLong),
+    postLocationLat: toNumberOrNull(p.postLocationLat ?? p.lat),
+    postLocationLong: toNumberOrNull(p.postLocationLong ?? p.lng),
   }));
   await db.table('posts').bulkPut(normalized);
+  if (import.meta.env.DEV) {
+    const count = await db.table('posts').count();
+    console.info(`[Dexie] Stored ${normalized.length} posts in cache (total ${count})`);
+  }
 }
 
 function lngInRange(lng, west, east) {

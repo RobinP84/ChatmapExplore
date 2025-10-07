@@ -29,6 +29,9 @@ function lngInRange(lng, west, east) {
  * }
  */
 export async function fetchPosts(params) {
+  if (import.meta.env.DEV) {
+    console.info('[firebaseRepository] fetchPosts called with params', params);
+  }
   const postsRef = collection(db, "posts");
 
   if (params?.bounds) {
