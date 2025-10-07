@@ -280,24 +280,6 @@ function MapComponent() {
 
   return (
     <div>
-      {/* NAV BAR */}
-      <div className="nav-bar">
-        {user ? (
-          <button onClick={() => (window.location.href = '/profile')}>
-            <svg width={32} height={32} aria-hidden="true">
-              <use href="#icon-user" />
-            </svg>
-          </button>
-        ) : (
-          <LoginButton />
-        )}
-        <button onClick={onSearch} disabled={searchDisabled} title={isCoolingDown ? 'Please wait…' : 'Search'}>
-          <svg width={32} height={32} aria-hidden="true" style={searchIconStyle}>
-            <use href="#icon-search" />
-          </svg>
-        </button>
-      </div>
-
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={initialCenter}
@@ -356,6 +338,24 @@ function MapComponent() {
           );
         })}
       </GoogleMap>
+
+      {/* NAV BAR */}
+      <div className="nav-bar">
+        {user ? (
+          <button onClick={() => (window.location.href = '/profile')}>
+            <svg width={32} height={32} aria-hidden="true">
+              <use href="#icon-user" />
+            </svg>
+          </button>
+        ) : (
+          <LoginButton />
+        )}
+        <button onClick={onSearch} disabled={searchDisabled} title={isCoolingDown ? 'Please wait…' : 'Search'}>
+          <svg width={32} height={32} aria-hidden="true" style={searchIconStyle}>
+            <use href="#icon-search" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
