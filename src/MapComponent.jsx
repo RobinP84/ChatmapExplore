@@ -61,6 +61,7 @@ function MapComponent() {
   const [user, setUser] = useState(null);
   const [labelOffsets, setLabelOffsets] = useState({}); // per-post pixel nudges
   const layoutMetricsRef = React.useRef(new Map());
+  const [layoutRevision, setLayoutRevision] = useState(0);
 
   // ─── HOOK 6: live vs frozen bounds ──────────────────────────────────
   // liveBounds  → updates on every pan/zoom (drives on-screen filtering)
@@ -98,6 +99,7 @@ function MapComponent() {
       southwest: b.getSouthWest().toJSON(),
       northeast: b.getNorthEast().toJSON(),
     });
+    setLayoutRevision((rev) => rev + 1);
   }, [map]);
 
   // ─── HOOK 7: Fetch posts for the *frozen* params only (manual trigger) ─
@@ -297,16 +299,25 @@ function MapComponent() {
     const nextOffsets = {};
     const placedRects = [];
 
-    ordered.forEach(({ id, m }, idx) => {
-      const step = Math.max(12, Math.round(Math.min(m.width, m.height) || 12));
+    ordered.forEach(({ id, m }) => {
+      const baseStep = Math.max(12, Math.round(Math.min(m.width, m.height) || 12));
+      const doubleStep = baseStep * 2;
       const candidates = [
         { x: 0, y: 0 },
-        { x: step, y: -step / 2 },
-        { x: -step, y: -step / 2 },
-        { x: 0, y: -step },
-        { x: 0, y: step },
-        { x: step, y: -step },
-        { x: -step, y: -step },
+        { x: baseStep, y: -baseStep / 2 },
+        { x: -baseStep, y: -baseStep / 2 },
+        { x: 0, y: -baseStep },
+        { x: 0, y: baseStep },
+        { x: baseStep, y: -baseStep },
+        { x: -baseStep, y: -baseStep },
+        { x: baseStep, y: baseStep / 2 },
+        { x: -baseStep, y: baseStep / 2 },
+        { x: doubleStep, y: -baseStep },
+        { x: -doubleStep, y: -baseStep },
+        { x: doubleStep, y: -doubleStep },
+        { x: -doubleStep, y: -doubleStep },
+        { x: 0, y: -doubleStep },
+        { x: 0, y: doubleStep },
       ];
 
       let chosen = { x: 0, y: 0 };
@@ -352,6 +363,17 @@ function MapComponent() {
   const handleLayout = React.useCallback(
     (metrics) => {
       if (!metrics?.id) return;
+      const prev = layoutMetricsRef.current.get(metrics.id);
+      if (
+        prev &&
+        prev.width === metrics.width &&
+        prev.height === metrics.height &&
+        prev.anchor?.x === metrics.anchor?.x &&
+        prev.anchor?.y === metrics.anchor?.y
+      ) {
+        return;
+      }
+
       layoutMetricsRef.current.set(metrics.id, metrics);
       recomputeLabelOffsets();
     },
@@ -424,6 +446,7 @@ function MapComponent() {
                 category={post.category}
                 offsetPx={offsetPx}
                 onLayout={handleLayout}
+                layoutRevision={layoutRevision}
                 onClick={() => handleTogglePost(post)}
                 onClose={() => handleCloseInfoWindow(post.id)}
                 onFavorite={() => addFavorite(post.id)}

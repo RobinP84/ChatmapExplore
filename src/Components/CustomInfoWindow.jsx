@@ -36,6 +36,7 @@ export default function CustomInfoWindow({
   isFavorited,
   onLayout = () => {},
   offsetPx = { x: 0, y: 0 },
+  layoutRevision = 0,
   className = '',
   style = {},
 }) {
@@ -84,7 +85,6 @@ export default function CustomInfoWindow({
   // ─── 2) Whenever “mode or post or callbacks” change, re‐render React into wrapper ─────
   useEffect(() => {
     if (!reactRootRef.current) return;
-    console.log("Mode =", mode);
     let content = null;
     if (mode === INFO_WINDOW_MODE.MAKE_POST) {
       // Show “Make a Post” form
@@ -126,6 +126,13 @@ export default function CustomInfoWindow({
     setReadyToDraw(true);
   }, [mode, post, onClick, onClose, onSave, onFavorite, isFavorited]);
 
+  // Force a redraw whenever the parent requests a layout refresh (e.g., after zoom/pan)
+  useEffect(() => {
+    if (layoutRevision > 0) {
+      setReadyToDraw(true);
+    }
+  }, [layoutRevision]);
+
   // ─── 3) Whenever “mode, post, or style” change, update wrapper’s CSS + (un)bind click listener ─────
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -165,6 +172,18 @@ export default function CustomInfoWindow({
     };
   }, [mode, post, onClick, style, categoryColor, offsetPx]);
 
+  // Whenever offsets change, trigger a redraw so the Google overlay picks up the new nudges.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (wrapper) {
+      wrapper.dataset.offsetX = offsetPx?.x ?? 0;
+      wrapper.dataset.offsetY = offsetPx?.y ?? 0;
+    }
+    if (overlayRef.current) {
+      overlayRef.current.draw();
+    }
+  }, [offsetPx]);
+
   // ─── 4) Whenever `map` or `position` change, (re)mount a brand‐new FullWidthOverlay ─────
   useEffect(() => {
     // Remove any old overlay
@@ -192,36 +211,43 @@ export default function CustomInfoWindow({
 
   // ─── 5) After React has painted into the wrapper (readyToDraw), force a redraw ─────
   useEffect(() => {
+    let rafId = null;
     if (readyToDraw && overlayRef.current) {
       // Call draw() explicitly so FullWidthOverlay re‐measures wrapper.offsetHeight
       overlayRef.current.draw();
 
-      // After draw, report layout metrics for collision handling
-      const wrapper = wrapperRef.current;
-      const projection = overlayRef.current.getProjection?.();
-      if (wrapper && projection && map && position && onLayout) {
-        const markerPoint = projection.fromLatLngToDivPixel(
-          new window.google.maps.LatLng(position.lat, position.lng)
-        );
+      rafId = window.requestAnimationFrame(() => {
+        const wrapper = wrapperRef.current;
+        const projection = overlayRef.current.getProjection?.();
+        if (wrapper && projection && map && position && onLayout) {
+          const markerPoint = projection.fromLatLngToDivPixel(
+            new window.google.maps.LatLng(position.lat, position.lng)
+          );
 
-        // Only report when all pieces are present
-        if (markerPoint) {
-          const mapRect = map.getDiv().getBoundingClientRect();
-          const rect = wrapper.getBoundingClientRect();
-          onLayout({
-            id: post?.id,
-            width: rect.width,
-            height: rect.height,
-            anchor: { x: markerPoint.x, y: markerPoint.y },
-            mapTopLeft: { x: mapRect.left, y: mapRect.top },
-            markerIconHeight,
-            labelGap,
-          });
+          // Only report when all pieces are present
+          if (markerPoint) {
+            const mapRect = map.getDiv().getBoundingClientRect();
+            const rect = wrapper.getBoundingClientRect();
+            const width = rect.width || wrapper.offsetWidth || 0;
+            const height = rect.height || wrapper.offsetHeight || 0;
+            onLayout({
+              id: post?.id,
+              width,
+              height,
+              anchor: { x: markerPoint.x, y: markerPoint.y },
+              mapTopLeft: { x: mapRect.left, y: mapRect.top },
+              markerIconHeight,
+              labelGap,
+            });
+          }
         }
-      }
-
-      setReadyToDraw(false);
+        setReadyToDraw(false);
+      });
     }
+
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
   }, [readyToDraw, map, position, onLayout, post]);
 
   return null; // This component never renders any DOM in React’s main tree
