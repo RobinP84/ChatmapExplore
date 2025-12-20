@@ -10,6 +10,7 @@ import { useLocalHistory } from './hooks/useLocalHistory';
 import { useLocalFavorites } from './hooks/useLocalFavorites';
 import { useUIStore } from './store/uiStore';
 import { MakePostIcon, PostMarkerIcon } from './Components/CustomMarkerIcon';
+import { CATEGORY_COLORS } from './constants/categoryColors';
 import LoginButton from './Components/loginButtonComponent';
 import authService from './firebase/firebaseAuth';
 import CustomInfoWindow from './Components/CustomInfoWindow';
@@ -58,6 +59,8 @@ function MapComponent() {
   const [map, setMap] = useState(null);
   const [markerLocation, setMarkerLocation] = useState(null);
   const [user, setUser] = useState(null);
+  const [labelOffsets, setLabelOffsets] = useState({}); // per-post pixel nudges
+  const layoutMetricsRef = React.useRef(new Map());
 
   // ─── HOOK 6: live vs frozen bounds ──────────────────────────────────
   // liveBounds  → updates on every pan/zoom (drives on-screen filtering)
@@ -254,6 +257,79 @@ function MapComponent() {
     return sorted.slice(0, 5);
   }, [posts, liveBounds, categoryFilter, closedPostIds]);
 
+  // ─── HELPER: detect overlaps between rectangles ─────────────────────
+  const intersects = (a, b) => {
+    return !(
+      a.x + a.width <= b.x ||
+      b.x + b.width <= a.x ||
+      a.y + a.height <= b.y ||
+      b.y + b.height <= a.y
+    );
+  };
+
+  const baseRectFor = (m, offset) => {
+    const markerHeight = m.markerIconHeight ?? 15;
+    const gap = m.labelGap ?? 8;
+    const left = m.anchor.x + offset.x - m.width / 2;
+    const top = m.anchor.y - markerHeight - gap - m.height + offset.y;
+    return { x: left, y: top, width: m.width, height: m.height };
+  };
+
+  const recomputeLabelOffsets = React.useCallback(() => {
+    const metricsMap = layoutMetricsRef.current;
+    if (!metricsMap || metricsMap.size === 0) return;
+
+    // Keep ordering consistent with displayed posts (already limited & sorted)
+    const ordered = displayedPosts
+      .map((p) => ({ id: p.id, m: metricsMap.get(p.id) }))
+      .filter((entry) => entry.m);
+
+    if (ordered.length === 0) return;
+
+    const markerBoxSize = 18;
+    const markerBoxes = ordered.map(({ m }) => ({
+      x: m.anchor.x - markerBoxSize / 2,
+      y: m.anchor.y - markerBoxSize / 2,
+      width: markerBoxSize,
+      height: markerBoxSize,
+    }));
+
+    const nextOffsets = {};
+    const placedRects = [];
+
+    ordered.forEach(({ id, m }, idx) => {
+      const step = Math.max(12, Math.round(Math.min(m.width, m.height) || 12));
+      const candidates = [
+        { x: 0, y: 0 },
+        { x: step, y: -step / 2 },
+        { x: -step, y: -step / 2 },
+        { x: 0, y: -step },
+        { x: 0, y: step },
+        { x: step, y: -step },
+        { x: -step, y: -step },
+      ];
+
+      let chosen = { x: 0, y: 0 };
+      let chosenRect = baseRectFor(m, chosen);
+
+      for (const cand of candidates) {
+        const rect = baseRectFor(m, cand);
+        const hitsMarker = markerBoxes.some((box) => intersects(rect, box));
+        const hitsLabel = placedRects.some((r) => intersects(rect, r));
+        if (!hitsMarker && !hitsLabel) {
+          chosen = cand;
+          chosenRect = rect;
+          break;
+        }
+      }
+
+      nextOffsets[id] = chosen;
+      placedRects.push(chosenRect);
+    });
+
+    setLabelOffsets(nextOffsets);
+  }, [displayedPosts]);
+
   // ─── SEARCH button behavior ─────────────────────────────────────────
   const onSearch = useCallback(() => {
     if (!liveBounds || isCoolingDown || loadingPosts || isFetching) return;
@@ -272,6 +348,19 @@ function MapComponent() {
 
   const searchDisabled = !liveBounds || isCoolingDown || loadingPosts || isFetching || creating;
   const searchIconStyle = searchDisabled ? { filter: 'grayscale(1)', opacity: 0.5 } : undefined;
+
+  const handleLayout = React.useCallback(
+    (metrics) => {
+      if (!metrics?.id) return;
+      layoutMetricsRef.current.set(metrics.id, metrics);
+      recomputeLabelOffsets();
+    },
+    [recomputeLabelOffsets]
+  );
+
+  useEffect(() => {
+    recomputeLabelOffsets();
+  }, [recomputeLabelOffsets]);
 
   // ─── Early out while the Maps JS API loads ──────────────────────────
   if (!isLoaded) {
@@ -312,6 +401,10 @@ function MapComponent() {
         {displayedPosts.map((post) => {
           const isExpanded = selectedPostId === post.id;
           const mode = isExpanded ? INFO_WINDOW_MODE.EXPANDED : INFO_WINDOW_MODE.MINIMIZED;
+          const offsetPx = labelOffsets[post.id] || { x: 0, y: 0 };
+
+          const categoryColor =
+            CATEGORY_COLORS[post.category] || CATEGORY_COLORS.default;
 
           return (
             <React.Fragment key={post.id}>
@@ -320,7 +413,7 @@ function MapComponent() {
                 position={{ lat: post.postLocationLat, lng: post.postLocationLong }}
                 onClick={() => handleTogglePost(post)}
               >
-                <PostMarkerIcon />
+                <PostMarkerIcon color={categoryColor} category={post.category} />
               </AdvancedMarker>
 
               <CustomInfoWindow
@@ -329,6 +422,8 @@ function MapComponent() {
                 post={post}
                 mode={mode}
                 category={post.category}
+                offsetPx={offsetPx}
+                onLayout={handleLayout}
                 onClick={() => handleTogglePost(post)}
                 onClose={() => handleCloseInfoWindow(post.id)}
                 onFavorite={() => addFavorite(post.id)}

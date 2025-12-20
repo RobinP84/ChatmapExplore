@@ -34,6 +34,8 @@ export default function CustomInfoWindow({
   onSave,
   onFavorite,
   isFavorited,
+  onLayout = () => {},
+  offsetPx = { x: 0, y: 0 },
   className = '',
   style = {},
 }) {
@@ -44,6 +46,15 @@ export default function CustomInfoWindow({
   // We need to know when React has finished painting into the wrapper
   // so that FullWidthOverlay.draw() can read wrapper.offsetHeight correctly:
   const [readyToDraw, setReadyToDraw] = useState(false);
+
+  const categoryColor =
+    mode === INFO_WINDOW_MODE.MAKE_POST
+      ? CATEGORY_COLORS.default
+      : CATEGORY_COLORS[post?.category] || CATEGORY_COLORS.default;
+
+  // Shared constants between overlay calculations and layout reporting
+  const markerIconHeight = 20;
+  const labelGap = 20;
 
   // ─── 1) On mount: create wrapper <div> & React root exactly once ─────
   useEffect(() => {
@@ -93,7 +104,14 @@ export default function CustomInfoWindow({
       content = (
         <strong
           onClick={onClick}
-          style={{ cursor: 'pointer', userSelect: 'none' }}
+          style={{
+            cursor: 'pointer',
+            userSelect: 'none',
+            fontSize: '22px',
+            color: categoryColor,
+            textShadow:
+              '-1px 0 2px rgba(64, 60, 60, 0.7), 0 1px 2px rgba(64, 60, 60, 0.7), 1px 0 2px rgba(64, 60, 60, 0.7), 0 -1px 2px rgba(64, 60, 60, 0.7)',
+          }}
         >
           {post?.title}
         </strong>
@@ -114,17 +132,18 @@ export default function CustomInfoWindow({
     if (!wrapper) return;
 
     // Decide the border color (default for MAKE_POST, otherwise based on category)
-    const hue =
-      mode === INFO_WINDOW_MODE.MAKE_POST
-        ? CATEGORY_COLORS.default
-        : CATEGORY_COLORS[post?.category] || CATEGORY_COLORS.default;
+    const isMinimized = mode === INFO_WINDOW_MODE.MINIMIZED;
+    // Flag for overlay positioning logic: full width unless minimized
+    wrapper.dataset.fullWidth = (!isMinimized).toString();
+    wrapper.dataset.offsetX = offsetPx?.x ?? 0;
+    wrapper.dataset.offsetY = offsetPx?.y ?? 0;
 
     Object.assign(wrapper.style, {
-      backgroundColor: 'white',
-      border: `2px solid ${hue}`,
-      borderRadius: '8px',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-      padding: '0.5rem',
+      backgroundColor: isMinimized ? 'transparent' : 'white',
+      border: isMinimized ? 'none' : `2px solid ${categoryColor}`,
+      borderRadius: isMinimized ? '0' : '8px',
+      boxShadow: isMinimized ? 'none' : '0 2px 6px rgba(0,0,0,0.3)',
+      padding: isMinimized ? '0' : '0.5rem',
       ...style,
     });
 
@@ -144,7 +163,7 @@ export default function CustomInfoWindow({
     return () => {
       wrapper.removeEventListener('click', handleWrapperClick);
     };
-  }, [mode, post, onClick, style]);
+  }, [mode, post, onClick, style, categoryColor, offsetPx]);
 
   // ─── 4) Whenever `map` or `position` change, (re)mount a brand‐new FullWidthOverlay ─────
   useEffect(() => {
@@ -176,9 +195,34 @@ export default function CustomInfoWindow({
     if (readyToDraw && overlayRef.current) {
       // Call draw() explicitly so FullWidthOverlay re‐measures wrapper.offsetHeight
       overlayRef.current.draw();
+
+      // After draw, report layout metrics for collision handling
+      const wrapper = wrapperRef.current;
+      const projection = overlayRef.current.getProjection?.();
+      if (wrapper && projection && map && position && onLayout) {
+        const markerPoint = projection.fromLatLngToDivPixel(
+          new window.google.maps.LatLng(position.lat, position.lng)
+        );
+
+        // Only report when all pieces are present
+        if (markerPoint) {
+          const mapRect = map.getDiv().getBoundingClientRect();
+          const rect = wrapper.getBoundingClientRect();
+          onLayout({
+            id: post?.id,
+            width: rect.width,
+            height: rect.height,
+            anchor: { x: markerPoint.x, y: markerPoint.y },
+            mapTopLeft: { x: mapRect.left, y: mapRect.top },
+            markerIconHeight,
+            labelGap,
+          });
+        }
+      }
+
       setReadyToDraw(false);
     }
-  }, [readyToDraw]);
+  }, [readyToDraw, map, position, onLayout, post]);
 
   return null; // This component never renders any DOM in React’s main tree
 }

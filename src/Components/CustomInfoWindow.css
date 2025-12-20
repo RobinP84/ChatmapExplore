@@ -1,12 +1,12 @@
 .custom-info-window {
   position: relative;
-  background: white;
-  border: 2px solid #333;        /* your custom border */
+  background: transparent;
+  border: none;
   border-radius: 6px;
-  padding: 8px 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  padding: 0;
+  box-shadow: none;
   font-size: 14px;
-  max-width: 200px; /* adjust as needed */
+  max-width: 200px;
   /* remove default close “×” simply by not rendering one */
 }
 

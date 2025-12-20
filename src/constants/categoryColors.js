@@ -5,5 +5,5 @@ export const CATEGORY_COLORS = {
   tech:   '#2ecc71',
   nightlife:   '#f1c40f',
   // …etc
-  default: '#333',
+  default: '#25c0ceff',
 };

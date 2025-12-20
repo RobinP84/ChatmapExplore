@@ -1,20 +1,18 @@
 /**
- * FullWidthOverlay is a thin factory function that returns a google.maps.OverlayView.
+ * FullWidthOverlay is a factory that returns a google.maps.OverlayView.
  *
- *   • onAdd(): appends `wrapperElement` into the map’s floatPane
- *   • draw():  measures the wrapper’s offsetHeight (React content) and
- *             the map’s offsetWidth, then positions the wrapper so that
- *             its bottom‐center sits just **above** the pin’s tip (markerIconHeight).
- *   • onRemove(): removes the wrapper from the DOM.
+ *   - onAdd(): appends `wrapperElement` into the map's floatPane
+ *   - draw(): measures the wrapper's size and positions it relative to the marker
+ *   - onRemove(): removes the wrapper from the DOM.
  *
  * Usage:
  *   const overlay = FullWidthOverlay(map, {lat, lng}, wrapperDiv);
- *   // That calls overlay.setMap(map) → onAdd() → draw() immediately.
- *   // To remove: overlay.setMap(null).
+ *   overlay.setMap(map); // triggers onAdd() then draw()
+ *   overlay.setMap(null); // removes
  *
- * @param {google.maps.Map} map        
- * @param {{lat: number, lng: number}} position 
- * @param {HTMLElement} wrapperElement  
+ * @param {google.maps.Map} map
+ * @param {{lat: number, lng: number}} position
+ * @param {HTMLElement} wrapperElement
  * @returns {google.maps.OverlayView}
  */
 export default function FullWidthOverlay(map, position, wrapperElement) {
@@ -25,7 +23,7 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
   const overlay = new window.google.maps.OverlayView();
 
   // Save these so onAdd/draw/onRemove can see them:
-  overlay._position = position;      // { lat: number, lng: number }
+  overlay._position = position; // { lat: number, lng: number }
   overlay._wrapper = wrapperElement; // the <div> we just rendered React into
 
   // Called automatically once you do overlay.setMap(map):
@@ -39,12 +37,12 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     }
   };
 
-  // Called whenever Google Maps thinks we should re‐draw:
+  // Called whenever Google Maps thinks we should redraw:
   overlay.draw = function () {
     const projection = this.getProjection();
     if (!projection) return;
 
-    // Convert lat/lng → pixel:
+    // Convert lat/lng to pixel:
     const latLng = new window.google.maps.LatLng(
       this._position.lat,
       this._position.lng
@@ -56,26 +54,42 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     const mapDiv = map.getDiv();
     const mapWidth = mapDiv.offsetWidth || 0;
 
-    // How tall is our wrapper? (React has just flushed into it.)
     const wrapperEl = this._wrapper;
+    const fullWidth = wrapperEl.dataset?.fullWidth === 'true';
+
+    // Position the wrapper so its bottom-center sits just above the pin tip.
+    const markerIconHeight = 20;
+    const labelGap = 26; // extra space between the marker triangle and the headline
+
+    // Width: full map for expanded/make-post; natural width for minimized.
+    if (!fullWidth) {
+      // Clamp to container width but let content dictate size
+      const naturalWidth = Math.min(
+        wrapperEl.scrollWidth || wrapperEl.offsetWidth || 0,
+        mapWidth
+      );
+      wrapperEl.style.width = 'auto';
+      wrapperEl.style.maxWidth = `${mapWidth}px`;
+      // If we measured a natural width, set it to avoid layout jumps
+      if (naturalWidth) {
+        wrapperEl.style.width = `${naturalWidth}px`;
+      }
+    } else {
+      wrapperEl.style.width = `${mapWidth}px`;
+      wrapperEl.style.maxWidth = 'none';
+    }
+
+    const offsetX = Number(wrapperEl.dataset?.offsetX || 0);
+    const offsetY = Number(wrapperEl.dataset?.offsetY || 0);
+
+    // Left: center horizontally at point.x, with optional nudge
+    wrapperEl.style.left = `${point.x + offsetX}px`;
+    wrapperEl.style.transform = 'translateX(-50%)';
+
+    // Height after width adjustments:
     const wrapperHeight = wrapperEl.offsetHeight || 0;
-
-    // SHIFT: you want the bottom‐center of the wrapper to sit just above
-    //        the pin tip. If your pin graphic is, say, 24px tall, choose
-    //        something like markerIconHeight = 15–20 so the tip pokes out.
-    const markerIconHeight = 15;
-
-    // Set the wrapper’s width. If you want side‐margins, do e.g. `mapWidth - 32`.
-    const desiredWidth = mapWidth;
-    wrapperEl.style.width = `${desiredWidth}px`;
-
-    // Left: center horizontally at point.x:
-    const left = point.x - desiredWidth / 2;
-    wrapperEl.style.left = `${left}px`;
-
-    // Top: (point.y - markerIconHeight) is where the pin tip sits.
-    //      We want the wrapper’s bottom aligned there, so top = (point.y - markerIconHeight - wrapperHeight).
-    const top = point.y - markerIconHeight - wrapperHeight;
+    // Top: align bottom of wrapper just above the marker tip, with optional nudge.
+    const top = point.y - markerIconHeight - labelGap - wrapperHeight + offsetY;
     wrapperEl.style.top = `${top}px`;
   };
 
@@ -86,7 +100,7 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     }
   };
 
-  // Finally, attach to the map (this triggers onAdd() → draw()):
+  // Finally, attach to the map (this triggers onAdd() then draw()):
   overlay.setMap(map);
   return overlay;
 }

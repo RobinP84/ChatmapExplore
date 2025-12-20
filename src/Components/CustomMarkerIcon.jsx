@@ -36,18 +36,50 @@ export const MakePostIcon = (props) => {
   );
 };
 
-export const PostMarkerIcon = (props) => {
+// Monochrome symbols to ensure they're always black
+const CATEGORY_SYMBOLS = {
+  news: 'N',
+  sports: 'S',
+  tech: 'T',
+  nightlife: '★',
+};
+
+export const PostMarkerIcon = ({ color = '#343330', category, ...props }) => {
   const style = {
-    width: '32px',
-    height: '32px',
-    // Custom styling or animations specific to this icon.
+    width: '48px',
+    height: '48px',
   };
 
+  const symbol = CATEGORY_SYMBOLS[category] || '•';
+
   return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M7.51612 13.7096C10.9367 13.7096 13.7097 10.9367 13.7097 7.51606C13.7097 4.09546 10.9367 1.32251 7.51612 1.32251C4.09552 1.32251 1.32257 4.09546 1.32257 7.51606C1.32257 10.9367 4.09552 13.7096 7.51612 13.7096Z" stroke="#343330" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      {...props}
+      style={style}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Drop/pin shape with darker gray body */}
+      <path
+        d="M12 2C7.58 2 4 5.51 4 9.83c0 4.4 3.74 8.64 7.06 11.37.55.45 1.33.45 1.88 0C16.26 18.47 20 14.23 20 9.83 20 5.51 16.42 2 12 2Z"
+        fill="#bdbdbd"
+        stroke="none"
+      />
+      {/* Colored circle behind symbol (smaller to show more gray) */}
+      <circle cx="12" cy="11" r="5.75" fill={color} />
+      {/* Symbol centered inside, forced to black */}
+      <text
+        x="12"
+        y="12.4"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="9"
+        fontWeight="700"
+        fill="#000"
+      >
+        {symbol}
+      </text>
     </svg>
-
-
   );
-};
+}
