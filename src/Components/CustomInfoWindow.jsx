@@ -140,8 +140,11 @@ export default function CustomInfoWindow({
 
     // Decide the border color (default for MAKE_POST, otherwise based on category)
     const isMinimized = mode === INFO_WINDOW_MODE.MINIMIZED;
+    const isExpanded = mode === INFO_WINDOW_MODE.EXPANDED;
+    const isMakePost = mode === INFO_WINDOW_MODE.MAKE_POST;
     // Flag for overlay positioning logic: full width unless minimized
-    wrapper.dataset.fullWidth = (!isMinimized).toString();
+    wrapper.dataset.fullWidth = isMakePost.toString();
+    wrapper.dataset.clampToBounds = isExpanded.toString();
     wrapper.dataset.offsetX = offsetPx?.x ?? 0;
     wrapper.dataset.offsetY = offsetPx?.y ?? 0;
 
@@ -151,6 +154,8 @@ export default function CustomInfoWindow({
       borderRadius: isMinimized ? '0' : '8px',
       boxShadow: isMinimized ? 'none' : '0 2px 6px rgba(0,0,0,0.3)',
       padding: isMinimized ? '0' : '0.5rem',
+      width: isExpanded ? '300px' : '',
+      maxWidth: isExpanded ? '300px' : '',
       ...style,
     });
 

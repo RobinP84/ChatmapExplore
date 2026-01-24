@@ -56,6 +56,7 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
 
     const wrapperEl = this._wrapper;
     const fullWidth = wrapperEl.dataset?.fullWidth === 'true';
+    const clampToBounds = wrapperEl.dataset?.clampToBounds === 'true';
 
     // Position the wrapper so its bottom-center sits just above the pin tip.
     const markerIconHeight = 20;
@@ -82,9 +83,28 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
     const offsetX = Number(wrapperEl.dataset?.offsetX || 0);
     const offsetY = Number(wrapperEl.dataset?.offsetY || 0);
 
-    // Left: center horizontally at point.x, with optional nudge
-    wrapperEl.style.left = `${point.x + offsetX}px`;
-    wrapperEl.style.transform = 'translateX(-50%)';
+    const wrapperWidth = wrapperEl.offsetWidth || 0;
+    const centerX = point.x + offsetX;
+    let finalLeft = centerX;
+    let useCenterTransform = true;
+
+    if (clampToBounds && wrapperWidth > 0 && mapWidth > 0) {
+      const rawLeft = centerX - wrapperWidth / 2;
+      const maxLeft = Math.max(mapWidth - wrapperWidth, 0);
+      const clampedLeft = Math.min(Math.max(rawLeft, 0), maxLeft);
+      if (Math.abs(clampedLeft - rawLeft) > 0.5) {
+        finalLeft = clampedLeft;
+        useCenterTransform = false;
+      }
+    }
+
+    if (useCenterTransform) {
+      wrapperEl.style.left = `${centerX}px`;
+      wrapperEl.style.transform = 'translateX(-50%)';
+    } else {
+      wrapperEl.style.left = `${finalLeft}px`;
+      wrapperEl.style.transform = 'none';
+    }
 
     // Height after width adjustments:
     const wrapperHeight = wrapperEl.offsetHeight || 0;

@@ -16,7 +16,11 @@ import authService from './firebase/firebaseAuth';
 import CustomInfoWindow from './Components/CustomInfoWindow';
 import { CATEGORY_ID_TO_NAME } from './constants/categoryMap';
 
-const containerStyle = { width: '375px', height: '812px' };
+const containerStyle = {
+  width: 'min(95vw, 1200px)',
+  height: '812px',
+  margin: '0 auto',
+};
 const initialCenter = { lat: 59.3293, lng: 18.0686 };
 const libraries = ['marker'];
 const mapOptions = {

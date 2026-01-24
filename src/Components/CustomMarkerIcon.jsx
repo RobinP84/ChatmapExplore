@@ -60,14 +60,22 @@ export const PostMarkerIcon = ({ color = '#343330', category, ...props }) => {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      {/* Drop/pin shape with darker gray body */}
+      {/* Drop/pin shape with darker body and outline for better contrast */}
       <path
         d="M12 2C7.58 2 4 5.51 4 9.83c0 4.4 3.74 8.64 7.06 11.37.55.45 1.33.45 1.88 0C16.26 18.47 20 14.23 20 9.83 20 5.51 16.42 2 12 2Z"
         fill="#bdbdbd"
-        stroke="none"
+        stroke="#2f2f2f"
+        strokeWidth="0.8"
       />
-      {/* Colored circle behind symbol (smaller to show more gray) */}
-      <circle cx="12" cy="11" r="5.75" fill={color} />
+      {/* Colored circle with matching outline */}
+      <circle
+        cx="12"
+        cy="11"
+        r="5.75"
+        fill={color}
+        stroke="#2f2f2f"
+        strokeWidth="0.8"
+      />
       {/* Symbol centered inside, forced to black */}
       <text
         x="12"
