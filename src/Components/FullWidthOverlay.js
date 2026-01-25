@@ -29,11 +29,16 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
   // Called automatically once you do overlay.setMap(map):
   overlay.onAdd = function () {
     const panes = this.getPanes();
-    if (panes && panes.floatPane) {
-      // Ensure the wrapper is absolutely positioned:
-      this._wrapper.style.position = 'absolute';
-      this._wrapper.style.boxSizing = 'border-box';
-      panes.floatPane.appendChild(this._wrapper);
+    if (panes) {
+      const targetPane = panes.overlayMouseTarget || panes.floatPane || panes.overlayLayer;
+      if (targetPane) {
+        // Ensure the wrapper is absolutely positioned:
+        this._wrapper.style.position = 'absolute';
+        this._wrapper.style.boxSizing = 'border-box';
+        this._wrapper.style.pointerEvents = 'auto';
+        this._wrapper.style.touchAction = 'manipulation';
+        targetPane.appendChild(this._wrapper);
+      }
     }
   };
 
@@ -80,36 +85,35 @@ export default function FullWidthOverlay(map, position, wrapperElement) {
       wrapperEl.style.maxWidth = 'none';
     }
 
-    const offsetX = Number(wrapperEl.dataset?.offsetX || 0);
-    const offsetY = Number(wrapperEl.dataset?.offsetY || 0);
+    const baseOffsetX = Number(wrapperEl.dataset?.baseOffsetX || wrapperEl.dataset?.offsetX || 0);
+    const baseOffsetY = Number(wrapperEl.dataset?.baseOffsetY || wrapperEl.dataset?.offsetY || 0);
 
     const wrapperWidth = wrapperEl.offsetWidth || 0;
-    const centerX = point.x + offsetX;
-    let finalLeft = centerX;
-    let useCenterTransform = true;
+    let centerX = point.x + baseOffsetX;
 
     if (clampToBounds && wrapperWidth > 0 && mapWidth > 0) {
-      const rawLeft = centerX - wrapperWidth / 2;
-      const maxLeft = Math.max(mapWidth - wrapperWidth, 0);
-      const clampedLeft = Math.min(Math.max(rawLeft, 0), maxLeft);
-      if (Math.abs(clampedLeft - rawLeft) > 0.5) {
-        finalLeft = clampedLeft;
-        useCenterTransform = false;
+      const halfWidth = wrapperWidth / 2;
+      let minCenter = halfWidth;
+      let maxCenter = mapWidth - halfWidth;
+      if (maxCenter < minCenter) {
+        const middle = mapWidth / 2;
+        minCenter = middle;
+        maxCenter = middle;
       }
+      centerX = Math.min(Math.max(centerX, minCenter), maxCenter);
     }
 
-    if (useCenterTransform) {
-      wrapperEl.style.left = `${centerX}px`;
-      wrapperEl.style.transform = 'translateX(-50%)';
-    } else {
-      wrapperEl.style.left = `${finalLeft}px`;
-      wrapperEl.style.transform = 'none';
-    }
+    const appliedOffsetX = centerX - point.x;
+    wrapperEl.dataset.offsetX = appliedOffsetX;
+    wrapperEl.style.left = `${centerX}px`;
+    wrapperEl.style.transform = 'translateX(-50%)';
 
     // Height after width adjustments:
     const wrapperHeight = wrapperEl.offsetHeight || 0;
+    const appliedOffsetY = baseOffsetY;
+    wrapperEl.dataset.offsetY = appliedOffsetY;
     // Top: align bottom of wrapper just above the marker tip, with optional nudge.
-    const top = point.y - markerIconHeight - labelGap - wrapperHeight + offsetY;
+    const top = point.y - markerIconHeight - labelGap - wrapperHeight + appliedOffsetY;
     wrapperEl.style.top = `${top}px`;
   };
 

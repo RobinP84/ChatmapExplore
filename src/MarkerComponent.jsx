@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
-function AdvancedMarker({ map, position, children, onClick }) {
+function AdvancedMarker({ map, position, children, onClick, onMouseEnter, onMouseLeave }) {
   const rootRef = useRef(null);
   const markerRef = useRef(null);
 
@@ -40,11 +40,20 @@ function AdvancedMarker({ map, position, children, onClick }) {
     markerRef.current.map = map;
 
     // Attach the onClick listener to the marker using 'gmp-click'
-    const listener = markerRef.current.addListener("gmp-click", onClick);
+    const listeners = [];
+    if (onClick) {
+      listeners.push(markerRef.current.addListener("gmp-click", onClick));
+    }
+    if (onMouseEnter) {
+      listeners.push(markerRef.current.addListener("gmp-mouseenter", onMouseEnter));
+    }
+    if (onMouseLeave) {
+      listeners.push(markerRef.current.addListener("gmp-mouseleave", onMouseLeave));
+    }
 
     // Cleanup: remove the listener when dependencies change
-    return () => listener.remove();
-  }, [map, position, children, onClick]);
+    return () => listeners.forEach((l) => l.remove());
+  }, [map, position, children, onClick, onMouseEnter, onMouseLeave]);
 
   return null;
 }

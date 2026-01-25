@@ -64,9 +64,12 @@ export default function CustomInfoWindow({
 
     // Prevent clicks (mousedown/touchstart/click) inside this wrapper
     // from falling through to the Google Map underneath:
-    wrapper.addEventListener('mousedown', (e) => e.stopPropagation());
-    wrapper.addEventListener('touchstart', (e) => e.stopPropagation());
-    wrapper.addEventListener('click', (e) => e.stopPropagation());
+    const stopPointerPropagation = (e) => e.stopPropagation();
+    wrapper.addEventListener('pointerdown', stopPointerPropagation);
+    wrapper.addEventListener('pointerup', stopPointerPropagation);
+    wrapper.addEventListener('pointermove', stopPointerPropagation);
+    wrapper.addEventListener('mousedown', stopPointerPropagation);
+    wrapper.addEventListener('touchstart', stopPointerPropagation);
 
     wrapperRef.current = wrapper;
     reactRootRef.current = createRoot(wrapper);
@@ -79,6 +82,11 @@ export default function CustomInfoWindow({
       }
       reactRootRef.current = null;
       wrapperRef.current = null;
+      wrapper.removeEventListener('pointerdown', stopPointerPropagation);
+      wrapper.removeEventListener('pointerup', stopPointerPropagation);
+      wrapper.removeEventListener('pointermove', stopPointerPropagation);
+      wrapper.removeEventListener('mousedown', stopPointerPropagation);
+      wrapper.removeEventListener('touchstart', stopPointerPropagation);
     };
   }, [className]);
 
@@ -103,7 +111,12 @@ export default function CustomInfoWindow({
       // MINIMIZED: only show the title; clicking the <strong> → expands
       content = (
         <strong
-          onClick={onClick}
+          data-post-id={post?.id ?? ''}
+          className="custom-info-window__title"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick?.();
+          }}
           style={{
             cursor: 'pointer',
             userSelect: 'none',
@@ -145,8 +158,6 @@ export default function CustomInfoWindow({
     // Flag for overlay positioning logic: full width unless minimized
     wrapper.dataset.fullWidth = isMakePost.toString();
     wrapper.dataset.clampToBounds = isExpanded.toString();
-    wrapper.dataset.offsetX = offsetPx?.x ?? 0;
-    wrapper.dataset.offsetY = offsetPx?.y ?? 0;
 
     Object.assign(wrapper.style, {
       backgroundColor: isMinimized ? 'transparent' : 'white',
@@ -154,14 +165,17 @@ export default function CustomInfoWindow({
       borderRadius: isMinimized ? '0' : '8px',
       boxShadow: isMinimized ? 'none' : '0 2px 6px rgba(0,0,0,0.3)',
       padding: isMinimized ? '0' : '0.5rem',
+      cursor: isMinimized ? 'pointer' : 'default',
       width: isExpanded ? '300px' : '',
       maxWidth: isExpanded ? '300px' : '',
+      zIndex: isExpanded ? '2000' : isMakePost ? '1500' : '1000',
       ...style,
     });
 
     // When MINIMIZED, we want the entire wrapper to respond to click → expand
     function handleWrapperClick(e) {
       if (mode === INFO_WINDOW_MODE.MINIMIZED && onClick) {
+        console.log('[CustomInfoWindow] Wrapper click -> expand', { id: post?.id });
         onClick();
       }
     }
@@ -181,8 +195,12 @@ export default function CustomInfoWindow({
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (wrapper) {
-      wrapper.dataset.offsetX = offsetPx?.x ?? 0;
-      wrapper.dataset.offsetY = offsetPx?.y ?? 0;
+      const offsetX = offsetPx?.x ?? 0;
+      const offsetY = offsetPx?.y ?? 0;
+      wrapper.dataset.baseOffsetX = offsetX;
+      wrapper.dataset.baseOffsetY = offsetY;
+      wrapper.dataset.offsetX = offsetX;
+      wrapper.dataset.offsetY = offsetY;
     }
     if (overlayRef.current) {
       overlayRef.current.draw();
@@ -235,6 +253,8 @@ export default function CustomInfoWindow({
             const rect = wrapper.getBoundingClientRect();
             const width = rect.width || wrapper.offsetWidth || 0;
             const height = rect.height || wrapper.offsetHeight || 0;
+            const offsetX = Number(wrapper.dataset?.offsetX || 0);
+            const offsetY = Number(wrapper.dataset?.offsetY || 0);
             onLayout({
               id: post?.id,
               width,
@@ -243,6 +263,7 @@ export default function CustomInfoWindow({
               mapTopLeft: { x: mapRect.left, y: mapRect.top },
               markerIconHeight,
               labelGap,
+              offset: { x: offsetX, y: offsetY },
             });
           }
         }

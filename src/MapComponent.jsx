@@ -29,6 +29,8 @@ const mapOptions = {
   mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
   gestureHandling: 'greedy',
 };
+const DEFAULT_MARKER_ICON_HEIGHT = 20;
+const DEFAULT_LABEL_GAP = 20;
 
 // Cooldown after pressing Search (ms)
 const SEARCH_COOLDOWN_MS = 800;
@@ -43,6 +45,22 @@ function isInBounds(lat, lng, { southwest, northeast }) {
     lat <= northeast.lat &&
     lngInRange(lng, southwest.lng, northeast.lng)
   );
+}
+
+function getClientPointFromDomEvent(domEvent) {
+  if (!domEvent) return null;
+  if (domEvent.touches && domEvent.touches.length) {
+    const touch = domEvent.touches[0];
+    return { x: touch.clientX, y: touch.clientY };
+  }
+  if (domEvent.changedTouches && domEvent.changedTouches.length) {
+    const touch = domEvent.changedTouches[0];
+    return { x: touch.clientX, y: touch.clientY };
+  }
+  if (typeof domEvent.clientX === 'number' && typeof domEvent.clientY === 'number') {
+    return { x: domEvent.clientX, y: domEvent.clientY };
+  }
+  return null;
 }
 
 function MapComponent() {
@@ -183,13 +201,42 @@ function MapComponent() {
   useEffect(() => authService.onAuthStateChanged((u) => setUser(u)), []);
 
   // ─── HOOK 12: Map interactions ──────────────────────────────────────
-  const handleMapClick = useCallback(
-    (e) => {
-      setMarkerLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-      setIsMakePostOpen(false);
-    },
-    [setIsMakePostOpen]
-  );
+  const findPostIdAtScreenPoint = useCallback((clientX, clientY) => {
+    if (typeof document === 'undefined' || !document.elementsFromPoint) return null;
+    const elements = document.elementsFromPoint(clientX, clientY);
+    for (const el of elements) {
+      if (!(el instanceof Element)) continue;
+      const titleEl = el.classList?.contains('custom-info-window__title')
+        ? el
+        : el.closest('.custom-info-window__title');
+      if (titleEl) {
+        const id = titleEl.getAttribute('data-post-id') || titleEl.dataset.postId;
+        if (id) {
+          return id;
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  const findMarkerIdAtScreenPoint = useCallback((clientX, clientY) => {
+    if (typeof document === 'undefined' || !document.elementsFromPoint) return null;
+    const elements = document.elementsFromPoint(clientX, clientY);
+    for (const el of elements) {
+      if (!(el instanceof Element)) continue;
+      const markerEl = el.classList?.contains('custom-post-marker-icon')
+        ? el
+        : el.closest('.custom-post-marker-icon');
+      if (markerEl) {
+        const id = markerEl.getAttribute('data-post-id') || markerEl.dataset.postId;
+        if (id) {
+          return id;
+        }
+      }
+    }
+    return null;
+  }, []);
+
 
   const handleMarkerClickForNew = useCallback(() => setIsMakePostOpen(true), [setIsMakePostOpen]);
 
@@ -263,6 +310,134 @@ function MapComponent() {
     return sorted.slice(0, 5);
   }, [posts, liveBounds, categoryFilter, closedPostIds]);
 
+  const cursorPointerActiveRef = useRef(false);
+  const hoverStateRef = useRef({ headlineId: null, markerId: null });
+  const pointerMoveRafRef = useRef(null);
+
+  const updateCursorForPoint = useCallback(
+    (point, source = 'motion') => {
+      if (!map) return { headlineId: null, markerId: null };
+      const headlineId = point ? findPostIdAtScreenPoint(point.x, point.y) : null;
+      const markerId = point ? findMarkerIdAtScreenPoint(point.x, point.y) : null;
+
+      if (hoverStateRef.current.headlineId !== headlineId) {
+      if (headlineId) {
+        console.log('[MapComponent] Cursor entered headline area', { postId: headlineId, point, source });
+      } else if (hoverStateRef.current.headlineId) {
+        console.log('[MapComponent] Cursor left headline area', { source });
+      }
+      }
+
+      if (hoverStateRef.current.markerId !== markerId) {
+      if (markerId) {
+        console.log('[MapComponent] Cursor entered marker area', { postId: markerId, point, source });
+      } else if (hoverStateRef.current.markerId) {
+        console.log('[MapComponent] Cursor left marker area', { source });
+      }
+      }
+
+      hoverStateRef.current = { headlineId, markerId };
+
+      const shouldShowPointer = Boolean(headlineId || markerId);
+      if (cursorPointerActiveRef.current !== shouldShowPointer) {
+        cursorPointerActiveRef.current = shouldShowPointer;
+        map.setOptions({ draggableCursor: shouldShowPointer ? 'pointer' : undefined });
+        console.log('[MapComponent] Cursor pointer toggle', {
+          active: shouldShowPointer,
+          headlineId,
+          markerId,
+          point,
+          source,
+        });
+      }
+
+      return { headlineId, markerId };
+    },
+    [map, findPostIdAtScreenPoint, findMarkerIdAtScreenPoint]
+  );
+
+  useEffect(() => {
+    if (!map) return;
+    return () => {
+      map.setOptions({ draggableCursor: undefined });
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (!map) return undefined;
+    const mapDiv = map.getDiv();
+
+    const processPoint = (point, sourceLabel = 'global-move') => {
+      updateCursorForPoint(point, sourceLabel);
+    };
+
+    const handleGlobalMouseMove = (event) => {
+      if (pointerMoveRafRef.current) {
+        window.cancelAnimationFrame(pointerMoveRafRef.current);
+      }
+      pointerMoveRafRef.current = window.requestAnimationFrame(() => {
+        const rect = mapDiv.getBoundingClientRect();
+        const inside =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
+        processPoint(inside ? { x: event.clientX, y: event.clientY } : null, 'global-move');
+      });
+    };
+
+    const handleGlobalMouseOut = (event) => {
+      const related = event.relatedTarget;
+      if (related && mapDiv.contains(related)) {
+        return;
+      }
+      processPoint(null, 'global-out');
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove, true);
+    window.addEventListener('mouseout', handleGlobalMouseOut, true);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove, true);
+      window.removeEventListener('mouseout', handleGlobalMouseOut, true);
+      if (pointerMoveRafRef.current) {
+        window.cancelAnimationFrame(pointerMoveRafRef.current);
+        pointerMoveRafRef.current = null;
+      }
+    };
+  }, [map, updateCursorForPoint]);
+
+  const handleMapClick = useCallback(
+    (e) => {
+      const point = getClientPointFromDomEvent(e?.domEvent);
+      const hoverInfo = updateCursorForPoint(point || null, 'click');
+      const hitPostId = hoverInfo.headlineId || hoverInfo.markerId;
+      const hitType = hoverInfo.headlineId ? 'headline' : hoverInfo.markerId ? 'marker' : null;
+      if (hitPostId && hitType) {
+        const targetPost = displayedPosts.find((p) => p.id === hitPostId);
+        if (targetPost) {
+          if (selectedPostId !== targetPost.id) {
+            handleTogglePost(targetPost);
+          }
+          console.log('[MapComponent] Map click expanded post from interactive hit', {
+            postId: targetPost.id,
+            source: hitType,
+          });
+          return;
+        }
+      }
+
+      if (point) {
+        console.log('[MapComponent] Map click outside interactive area; placing marker', {
+          point,
+        });
+      }
+      setMarkerLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+      setIsMakePostOpen(false);
+    },
+    [displayedPosts, selectedPostId, handleTogglePost, setMarkerLocation, setIsMakePostOpen, updateCursorForPoint]
+  );
+
   // ─── HELPER: detect overlaps between rectangles ─────────────────────
   const intersects = (a, b) => {
     return !(
@@ -273,11 +448,15 @@ function MapComponent() {
     );
   };
 
-  const baseRectFor = (m, offset) => {
+  const baseRectFor = (m, offset = { x: 0, y: 0 }) => {
     const markerHeight = m.markerIconHeight ?? 15;
     const gap = m.labelGap ?? 8;
-    const left = m.anchor.x + offset.x - m.width / 2;
-    const top = m.anchor.y - markerHeight - gap - m.height + offset.y;
+    const existingOffsetX = m.offset?.x ?? 0;
+    const existingOffsetY = m.offset?.y ?? 0;
+    const totalOffsetX = existingOffsetX + (offset.x ?? 0);
+    const totalOffsetY = existingOffsetY + (offset.y ?? 0);
+    const left = m.anchor.x + totalOffsetX - m.width / 2;
+    const top = m.anchor.y - markerHeight - gap - m.height + totalOffsetY;
     return { x: left, y: top, width: m.width, height: m.height };
   };
 
@@ -438,8 +617,19 @@ function MapComponent() {
                 map={map}
                 position={{ lat: post.postLocationLat, lng: post.postLocationLong }}
                 onClick={() => handleTogglePost(post)}
+                onMouseEnter={() =>
+                  console.log('[MapComponent] Marker mouse enter', { postId: post.id })
+                }
+                onMouseLeave={() =>
+                  console.log('[MapComponent] Marker mouse leave', { postId: post.id })
+                }
               >
-                <PostMarkerIcon color={categoryColor} category={post.category} />
+                <PostMarkerIcon
+                  color={categoryColor}
+                  category={post.category}
+                  className="custom-post-marker-icon"
+                  data-post-id={post.id}
+                />
               </AdvancedMarker>
 
               <CustomInfoWindow

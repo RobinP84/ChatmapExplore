@@ -7,7 +7,15 @@
   box-shadow: none;
   font-size: 14px;
   max-width: 200px;
+  pointer-events: auto;
+  user-select: none;
   /* remove default close “×” simply by not rendering one */
+}
+
+.custom-info-window__title {
+  cursor: pointer !important;
+  user-select: none;
+  pointer-events: auto;
 }
 
 .custom-info-window.expanded-post-window {
